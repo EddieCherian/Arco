@@ -50,4 +50,86 @@ export function BandArranger({ midiData }: BandArrangerProps) {
         textContent += `Note Details:\n`;
         
         convertedData.notes.forEach((note, idx) => {
-          textContent += `${idx
+          textContent += `${idx + 1}. Pitch: ${note.pitch} | Start: ${note.startTime.toFixed(2)}s | Duration: ${(note.endTime - note.startTime).toFixed(2)}s | Velocity: ${note.velocity}\n`;
+        });
+        
+        zip.file(`${instrument}_part.txt`, textContent);
+      }
+      
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'band_arrangement.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to generate band parts:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const toggleInstrument = (instrument: string) => {
+    if (selectedInstruments.includes(instrument)) {
+      setSelectedInstruments(selectedInstruments.filter(i => i !== instrument));
+    } else {
+      setSelectedInstruments([...selectedInstruments, instrument]);
+    }
+  };
+
+  return (
+    <div className="bg-[#0a0f1a] rounded-lg p-6 border border-[#C9A84C]/20">
+      <div className="flex items-center gap-2 mb-4">
+        <Users size={20} className="text-[#C9A84C]" />
+        <h3 className="text-lg font-semibold text-[#C9A84C]">Band Arranger</h3>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-2 text-[#EEF2FF]/80">
+            Select Instruments (max 8)
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {bandInstruments.map((instrument) => (
+              <label
+                key={instrument}
+                className="flex items-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg cursor-pointer hover:border-[#C9A84C] transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedInstruments.includes(instrument)}
+                  onChange={() => toggleInstrument(instrument)}
+                  className="w-4 h-4 rounded border-[#C9A84C]/30 text-[#C9A84C] focus:ring-[#C9A84C]"
+                />
+                <span className="text-sm capitalize">{instrument}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        
+        <button
+          onClick={generateParts}
+          disabled={isGenerating || selectedInstruments.length === 0}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#05080F] rounded-lg hover:bg-[#b8943a] transition-colors disabled:opacity-50"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              Generating Parts...
+            </>
+          ) : (
+            <>
+              <Download size={18} />
+              Generate Band Parts (ZIP)
+            </>
+          )}
+        </button>
+        
+        <p className="text-xs text-[#EEF2FF]/40 text-center">
+          Each instrument part is optimized for its range and capabilities
+        </p>
+      </div>
+    </div>
+  );
+}
