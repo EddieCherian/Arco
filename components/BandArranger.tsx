@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Users, Download, Loader2, Check } from 'lucide-react';
 import JSZip from 'jszip';
+import * as MidiWriter from 'midi-writer-js';
 import { MidiData } from '@/lib/types';
 import { MidiConverter } from '@/lib/midiConverter';
 
@@ -22,9 +23,30 @@ const bandInstruments = [
   { id: 'saxophone', name: 'Saxophone', icon: '🎷', range: 'Db3–A5' },
 ];
 
+const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
 export function BandArranger({ midiData }: BandArrangerProps) {
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>(['piano', 'bass']);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateMidiTrack = (notes: any[], tempo: number) => {
+    const track = new MidiWriter.Track();
+    track.setTempo(tempo);
+    track.setTimeSignature(4, 4);
+    
+    notes.forEach(note => {
+      const noteName = noteNames[note.pitch % 12];
+      const octave = Math.floor(note.pitch / 12) - 1;
+      track.addEvent(new MidiWriter.NoteEvent({
+        pitch: [`${noteName}${octave}`],
+        duration: '4',
+        velocity: note.velocity
+      }));
+    });
+    
+    const writer = new MidiWriter.Writer([track]);
+    return writer.dataUri();
+  };
 
   const generateParts = async () => {
     setIsGenerating(true);
@@ -35,7 +57,7 @@ export function BandArranger({ midiData }: BandArrangerProps) {
         const instrumentData = bandInstruments.find(i => i.id === instrument);
         const convertedData = await MidiConverter.convertInstrument(midiData, instrument);
         
-        // Generate nice HTML part sheet
+        // Generate HTML part sheet
         const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
@@ -87,7 +109,6 @@ export function BandArranger({ midiData }: BandArrangerProps) {
     </thead>
     <tbody>
       ${convertedData.notes.map((note, idx) => {
-        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         const noteName = noteNames[note.pitch % 12];
         const octave = Math.floor(note.pitch / 12) - 1;
         return `<tr class="note-row">
@@ -100,7 +121,7 @@ export function BandArranger({ midiData }: BandArrangerProps) {
         </tr>`;
       }).join('')}
     </tbody>
-  </table>
+   </table>
   
   <div class="footer">
     <p>Arco Music Platform • AI-Powered Composition Tool</p>
@@ -110,19 +131,26 @@ export function BandArranger({ midiData }: BandArrangerProps) {
         
         zip.file(`${instrument}_part.html`, htmlContent);
         
-        // Also add MIDI file for each part
-        const track = new (await import('midi-writer-js')).Track();
-        track.setTempo(convertedData.tempo);
-        convertedData.notes.forEach(note => {
-          const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-          const noteName = noteNames[note.pitch % 12];
-          const octave = Math.floor(note.pitch / 12) - 1;
-          track.addEvent(new (await import('midi-writer-js')).NoteEvent({
-            pitch: [`${noteName}${octave}`],
-            duration: '4',
-            velocity: note.velocity
-          }));
-        });
+        // Add MIDI file for each part
+        const midiDataUri = generateMidiTrack(convertedData.notes, convertedData.tempo);
+        const midiBlob = await fetch(midiDataUri).then(res => res.blob());
+        zip.file(`${instrument}_part.mid`, midiBlob);
+        
+        // Add JSON data for each part
+        const jsonContent = JSON.stringify({
+          instrument: instrument,
+          key: convertedData.key,
+          tempo: convertedData.tempo,
+          timeSignature: convertedData.timeSignature,
+          notes: convertedData.notes,
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            sourceInstrument: midiData.instrument,
+            originalNoteCount: midiData.notes.length
+          }
+        }, null, 2);
+        
+        zip.file(`${instrument}_data.json`, jsonContent);
       }
       
       const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -201,7 +229,7 @@ export function BandArranger({ midiData }: BandArrangerProps) {
       </button>
       
       <p className="text-xs text-white/40 text-center mt-4">
-        Each part includes HTML score, MIDI file, and performance data
+        Each part includes HTML score, MIDI file, and JSON data
       </p>
     </div>
   );
