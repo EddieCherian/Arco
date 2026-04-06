@@ -24,26 +24,34 @@ export function ChordChart({ midiData }: ChordChartProps) {
       if (!chordMap.has(timeSlot)) {
         chordMap.set(timeSlot, []);
       }
-      chordMap.get(timeSlot)!.push(note.pitch);
+      const existing = chordMap.get(timeSlot) || [];
+      existing.push(note.pitch);
+      chordMap.set(timeSlot, existing);
     });
     
     const detectedChords: Array<{name: string, time: number, notes: number[]}> = [];
     
     chordMap.forEach((notes, timeSlot) => {
-      const uniqueNotes = [...new Set(notes)];
+      const uniqueNotes: number[] = [];
+      notes.forEach(note => {
+        if (!uniqueNotes.includes(note)) {
+          uniqueNotes.push(note);
+        }
+      });
+      
       if (uniqueNotes.length >= 2) {
         const root = uniqueNotes[0] % 12;
-        const third = uniqueNotes.find(n => (n % 12) === (root + 4) % 12);
-        const fifth = uniqueNotes.find(n => (n % 12) === (root + 7) % 12);
+        const hasThird = uniqueNotes.some(n => (n % 12) === (root + 4) % 12);
+        const hasFifth = uniqueNotes.some(n => (n % 12) === (root + 7) % 12);
         
         let chordName = '';
         const rootNote = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][root];
         
-        if (third && fifth) {
+        if (hasThird && hasFifth) {
           chordName = `${rootNote} Maj`;
-        } else if (third && !fifth) {
+        } else if (hasThird && !hasFifth) {
           chordName = `${rootNote} maj7`;
-        } else if (!third && fifth) {
+        } else if (!hasThird && hasFifth) {
           chordName = `${rootNote} 5`;
         } else {
           chordName = `${rootNote}`;
@@ -92,7 +100,7 @@ export function ChordChart({ midiData }: ChordChartProps) {
       
       <div className="mt-4 p-3 bg-[#C9A84C]/5 rounded-lg border border-[#C9A84C]/10">
         <p className="text-xs text-[#EEF2FF]/60">
-          Suggested progression: {chords.map(c => c.name).join(' → ')}
+          Suggested progression: {chords.slice(0, 4).map(c => c.name).join(' → ')}
         </p>
       </div>
     </div>
