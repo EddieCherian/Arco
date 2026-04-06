@@ -61,16 +61,27 @@ export class AudioProcessor {
       throw new Error('No audio data detected. Please try recording again.');
     }
 
-    const notes = noteFramesToTime(
+    const rawNotes = noteFramesToTime(
       addPitchBendsToNoteEvents(
         contours,
         outputToNotesPoly(frames, onsets, 0.25, 0.25, 5)
       )
     );
 
-    if (notes.length === 0) {
+    if (rawNotes.length === 0) {
       throw new Error('No notes detected. Try playing louder or closer to the microphone.');
     }
+
+    // 🔥 CLEAN NOTES (keep ALL real notes, remove only junk)
+    const notes = rawNotes
+      // remove super short glitch notes
+      .filter((n: any) => (n.endTimeSeconds - n.startTimeSeconds) > 0.08)
+
+      // remove very quiet noise
+      .filter((n: any) => (n.amplitude ?? 0.8) > 0.15)
+
+      // sort properly
+      .sort((a: any, b: any) => a.startTimeSeconds - b.startTimeSeconds);
 
     return {
       notes: notes.map((n: any) => ({
