@@ -3,38 +3,49 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { Music, Mail, Lock, Chrome } from 'lucide-react';
+import { Music, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     
     try {
       if (isLogin) {
         await signInWithEmail(email, password);
       } else {
+        if (password.length < 6) {
+          throw new Error('Password must be at least 6 characters');
+        }
         await signUpWithEmail(email, password);
       }
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
     try {
       await signInWithGoogle();
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Google sign in failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -42,27 +53,27 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#05080F] flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#C9A84C]/10 mb-4">
-            <Music size={32} className="text-[#C9A84C]" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[#C9A84C]/10 mb-4">
+            <Music size={40} className="text-[#C9A84C]" />
           </div>
-          <h1 className="text-3xl font-bold text-[#C9A84C]">Arco</h1>
+          <h1 className="text-4xl font-bold text-[#C9A84C]">Arco</h1>
           <p className="text-[#EEF2FF]/60 mt-2">AI-Powered Music Platform</p>
         </div>
         
-        <div className="bg-[#0a0f1a] rounded-lg border border-[#C9A84C]/20 p-6">
+        <div className="bg-[#0a0f1a] rounded-lg border border-[#C9A84C]/20 p-8">
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 rounded-lg transition-colors ${
-                isLogin ? 'bg-[#C9A84C] text-[#05080F]' : 'bg-[#05080F] text-[#EEF2FF]/60'
+              className={`flex-1 py-2 rounded-lg transition-colors font-medium ${
+                isLogin ? 'bg-[#C9A84C] text-[#05080F]' : 'bg-[#05080F] text-[#EEF2FF]/60 hover:text-[#EEF2FF]'
               }`}
             >
               Sign In
             </button>
             <button
               onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 rounded-lg transition-colors ${
-                !isLogin ? 'bg-[#C9A84C] text-[#05080F]' : 'bg-[#05080F] text-[#EEF2FF]/60'
+              className={`flex-1 py-2 rounded-lg transition-colors font-medium ${
+                !isLogin ? 'bg-[#C9A84C] text-[#05080F]' : 'bg-[#05080F] text-[#EEF2FF]/60 hover:text-[#EEF2FF]'
               }`}
             >
               Sign Up
@@ -78,7 +89,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-[#EEF2FF]/80">
-                Email
+                Email Address
               </label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#EEF2FF]/40" />
@@ -86,7 +97,8 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] focus:border-[#C9A84C] focus:outline-none"
+                  className="w-full pl-10 pr-4 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] focus:border-[#C9A84C] focus:outline-none transition-colors"
+                  placeholder="you@example.com"
                   required
                 />
               </div>
@@ -102,17 +114,29 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] focus:border-[#C9A84C] focus:outline-none"
+                  className="w-full pl-10 pr-4 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] focus:border-[#C9A84C] focus:outline-none transition-colors"
+                  placeholder="••••••••"
                   required
                 />
               </div>
+              {!isLogin && (
+                <p className="text-xs text-[#EEF2FF]/40 mt-1">Password must be at least 6 characters</p>
+              )}
             </div>
             
             <button
               type="submit"
-              className="w-full py-2 bg-[#C9A84C] text-[#05080F] rounded-lg font-semibold hover:bg-[#b8943a] transition-colors"
+              disabled={loading}
+              className="w-full py-2 bg-[#C9A84C] text-[#05080F] rounded-lg font-semibold hover:bg-[#b8943a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLogin ? 'Sign In' : 'Create Account'}
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>{isLogin ? 'Signing In...' : 'Creating Account...'}</span>
+                </div>
+              ) : (
+                <span>{isLogin ? 'Sign In' : 'Create Account'}</span>
+              )}
             </button>
           </form>
           
@@ -127,7 +151,8 @@ export default function LoginPage() {
           
           <button
             onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-2 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] hover:bg-[#C9A84C]/5 transition-colors disabled:opacity-50"
           >
             <Chrome size={18} />
             Continue with Google
