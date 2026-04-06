@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import { Play, Pause, Square, Target } from 'lucide-react';
 import { SheetMusicRenderer } from './SheetMusicRenderer';
@@ -15,12 +15,13 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentNoteIndex, setCurrentNoteIndex] = useState(-1);
   const [speed, setSpeed] = useState(0.7);
-  const synthRef = useState<Tone.PolySynth | null>(null)[0];
+  const synthRef = useRef<Tone.PolySynth | null>(null);
+  const scheduleIdsRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (isActive) {
       const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-      synthRef = synth;
+      synthRef.current = synth;
       
       return () => {
         synth.dispose();
@@ -36,6 +37,7 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
     
     await Tone.start();
     Tone.Transport.bpm.value = midiData.tempo * speed;
+    Tone.Destination.volume.value = -6;
     
     let currentIdx = 0;
     
@@ -46,17 +48,21 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
       }
       
       const note = midiData.notes[index];
-      const frequency = Tone.Frequency(note.pitch, 'midi').toFrequency();
-      synthRef.triggerAttackRelease(frequency, note.endTime - note.startTime, time);
+      if (synthRef.current) {
+        const frequency = Tone.Frequency(note.pitch, 'midi').toFrequency();
+        synthRef.current.triggerAttackRelease(frequency, note.endTime - note.startTime, time);
+      }
       setCurrentNoteIndex(index);
       
       const nextTime = time + (note.endTime - note.startTime);
-      Tone.Transport.schedule((t) => playNote(t, index + 1), nextTime);
+      const scheduleId = Tone.Transport.schedule((t) => playNote(t, index + 1), nextTime);
+      scheduleIdsRef.current.push(scheduleId);
     };
     
-    Tone.Transport.schedule((time) => {
+    const scheduleId = Tone.Transport.schedule((time) => {
       playNote(time, currentIdx);
     }, 0);
+    scheduleIdsRef.current.push(scheduleId);
     
     Tone.Transport.start();
     setIsPlaying(true);
@@ -65,6 +71,8 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
   const stopPractice = () => {
     Tone.Transport.stop();
     Tone.Transport.cancel();
+    scheduleIdsRef.current.forEach(id => Tone.Transport.clear(id));
+    scheduleIdsRef.current = [];
     setIsPlaying(false);
     setCurrentNoteIndex(-1);
   };
