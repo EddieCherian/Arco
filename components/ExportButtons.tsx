@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, FileJson, FileText, Music } from 'lucide-react';
+import { Download, FileText, Music } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as MidiWriter from 'midi-writer-js';
 import * as Tone from 'tone';
@@ -84,7 +84,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
     try {
       await Tone.start();
       const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-      const duration = Math.max(...midiData.notes.map(n => n.endTime)) + 1;
+      const duration = Math.max(...midiData.notes.map(n => n.endTime), 1);
       
       const buffer = await Tone.Offline(() => {
         midiData.notes.forEach(note => {
@@ -147,11 +147,15 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       </attributes>`;
       
       midiData.notes.forEach(note => {
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const noteName = noteNames[note.pitch % 12];
+        const octave = Math.floor(note.pitch / 12) - 1;
+        
         xml += `
       <note>
         <pitch>
-          <step>${String.fromCharCode(65 + (note.pitch % 12))}</step>
-          <octave>${Math.floor(note.pitch / 12) - 1}</octave>
+          <step>${noteName}</step>
+          <octave>${octave}</octave>
         </pitch>
         <duration>${Math.round((note.endTime - note.startTime) * 4)}</duration>
         <voice>1</voice>
@@ -211,7 +215,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
           disabled={isExporting}
           className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
         >
-          <FileJson size={16} />
+          <Download size={16} />
           MusicXML
         </button>
       </div>
