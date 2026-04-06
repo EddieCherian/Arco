@@ -23,76 +23,87 @@ export function PlaybackControls({
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(-6);
   const synthRef = useRef<any>(null);
-  const scheduleIdsRef = useRef<string[]>([]);
+  const currentNoteIndexRef = useRef(0);
+  const isPlayingRef = useRef(false);
   
   useEffect(() => {
+    // Initialize synth
     const synth = new Tone.PolySynth(Tone.Synth).toDestination();
     synthRef.current = synth;
     
     return () => {
-      synth.dispose();
+      if (synthRef.current) {
+        synthRef.current.dispose();
+      }
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
     };
   }, []);
   
-  const play = async () => {
+  const stopPlayback = () => {
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    currentNoteIndexRef.current = 0;
+    if (onPlaybackStop) onPlaybackStop();
+  };
+  
+  const scheduleNotes = () => {
+    let currentTime = 0;
+    
+    for (let i = 0; i < midiData.notes.length; i++) {
+      const note = midiData.notes[i];
+      const duration = note.endTime - note.startTime;
+      const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
+      
+      Tone.Transport.schedule((time) => {
+        if (synthRef.current && isPlayingRef.current) {
+          synthRef.current.triggerAttackRelease(frequency, duration, time);
+          if (onCurrentNoteChange) {
+            onCurrentNoteChange(i);
+          }
+        }
+      }, currentTime);
+      
+      currentTime += duration;
+    }
+    
+    // Schedule loop if enabled
+    if (isLooping) {
+      Tone.Transport.schedule(() => {
+        if (isPlayingRef.current && isLooping) {
+          scheduleNotes();
+        }
+      }, currentTime);
+    }
+  };
+  
+  const startPlayback = async () => {
     await Tone.start();
     Tone.Transport.bpm.value = midiData.tempo * speed;
     Tone.Destination.volume.value = volume;
     
-    let currentNoteIndex = 0;
+    isPlayingRef.current = true;
+    currentNoteIndexRef.current = 0;
     
-    const scheduleNote = (time: number, index: number) => {
-      if (index >= midiData.notes.length) {
-        if (isLooping) {
-          currentNoteIndex = 0;
-          scheduleNote(time + 0.1, 0);
-        }
-        return;
-      }
-      
-      const note = midiData.notes[index];
-      if (synthRef.current) {
-        const frequency = Tone.Frequency(note.pitch, 'midi').toFrequency();
-        synthRef.current.triggerAttackRelease(frequency, note.endTime - note.startTime, time);
-      }
-      
-      if (onCurrentNoteChange) {
-        onCurrentNoteChange(index);
-      }
-      
-      const nextTime = time + (note.endTime - note.startTime);
-      const scheduleId = Tone.Transport.schedule((t) => scheduleNote(t, index + 1), nextTime);
-      scheduleIdsRef.current.push(scheduleId as string);
-    };
-    
-    const scheduleId = Tone.Transport.schedule((time) => {
-      scheduleNote(time, currentNoteIndex);
-    }, 0);
-    scheduleIdsRef.current.push(scheduleId as string);
-    
+    scheduleNotes();
     Tone.Transport.start();
     setIsPlaying(true);
     if (onPlaybackStart) onPlaybackStart();
   };
   
-  const stop = () => {
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
-    scheduleIdsRef.current = [];
-    setIsPlaying(false);
-    if (onPlaybackStop) onPlaybackStop();
-  };
-  
-  const pause = () => {
+  const pausePlayback = () => {
     Tone.Transport.pause();
     setIsPlaying(false);
+    isPlayingRef.current = false;
   };
   
   return (
     <div className="bg-[#0a0f1a] rounded-lg p-4 border border-[#C9A84C]/20">
       <div className="flex items-center gap-3">
         <button
-          onClick={play}
+          onClick={startPlayback}
           disabled={isPlaying}
           className="p-2 rounded-full bg-[#C9A84C] text-[#05080F] hover:bg-[#b8943a] transition-colors disabled:opacity-50"
         >
@@ -100,7 +111,7 @@ export function PlaybackControls({
         </button>
         
         <button
-          onClick={pause}
+          onClick={pausePlayback}
           disabled={!isPlaying}
           className="p-2 rounded-full bg-[#1a2030] text-[#EEF2FF] hover:bg-[#202838] transition-colors disabled:opacity-50"
         >
@@ -108,7 +119,7 @@ export function PlaybackControls({
         </button>
         
         <button
-          onClick={stop}
+          onClick={stopPlayback}
           className="p-2 rounded-full bg-[#1a2030] text-[#EEF2FF] hover:bg-[#202838] transition-colors"
         >
           <Square size={20} />
