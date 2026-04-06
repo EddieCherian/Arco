@@ -37,7 +37,7 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
         await processAudio(blob);
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(100);
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -57,9 +57,7 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
   const processAudio = async (blob: Blob) => {
     setIsProcessing(true);
     try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const audioBuffer = await AudioProcessor.blobToAudioBuffer(blob);
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
       onTranscriptionComplete(midiData);
     } catch (error) {
@@ -75,9 +73,7 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
     
     setIsProcessing(true);
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const audioBuffer = await AudioProcessor.blobToAudioBuffer(file);
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
       onTranscriptionComplete(midiData);
     } catch (error) {
