@@ -6,35 +6,46 @@ import { useAuth } from '@/hooks/useAuth';
 import { Music, Mic, Share2, Sparkles, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (user) {
+    if (!loading && user) {
       router.push('/dashboard');
     }
-  }, [user, router]);
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#05080F] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#C9A84C]/30 border-t-[#C9A84C] rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-[#EEF2FF]/60">Loading Arco...</p>
+        </div>
+      </div>
+    );
+  }
 
   const features = [
     {
       icon: Mic,
       title: 'Audio Transcription',
-      description: 'Record or upload audio and convert to sheet music instantly using Spotify Basic Pitch'
+      description: 'Record or upload audio and convert to sheet music instantly'
     },
     {
       icon: Music,
       title: 'Smart Instrument Conversion',
-      description: 'Transform between 14+ instruments with intelligent range mapping using Magenta.js'
+      description: 'Transform between 14+ instruments with intelligent range mapping'
     },
     {
       icon: Share2,
       title: 'Collaboration Tools',
-      description: 'Share compositions via unique links and export to PDF, MIDI, MP3, or MusicXML'
+      description: 'Share compositions via unique links and export to PDF, MIDI, or Audio'
     },
     {
       icon: Sparkles,
       title: 'AI Assistant',
-      description: 'Get musical suggestions and analysis from Gemini 2.0 Flash AI'
+      description: 'Get musical suggestions and analysis from Gemini AI'
     }
   ];
 
@@ -52,9 +63,9 @@ export default function LandingPage() {
             
             <h1 className="text-6xl md:text-7xl font-bold mb-6">
               <span className="text-[#C9A84C]">Arco</span>
-              <span className="text-[#EEF2FF]">: Compose</span>
+              <span className="text-[#EEF2FF]">: Create</span>
               <br />
-              <span className="text-[#EEF2FF]">Transcribe, Play</span>
+              <span className="text-[#EEF2FF]">Music Smarter</span>
             </h1>
             
             <p className="text-xl text-[#EEF2FF]/70 mb-8 max-w-2xl mx-auto">
@@ -69,15 +80,6 @@ export default function LandingPage() {
               >
                 Get Started
                 <ArrowRight size={18} />
-              </button>
-              <button
-                onClick={() => {
-                  const demoSection = document.getElementById('features');
-                  demoSection?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="px-8 py-3 border border-[#C9A84C]/30 text-[#EEF2FF] rounded-lg font-semibold hover:bg-[#C9A84C]/10 transition-all"
-              >
-                Learn More
               </button>
             </div>
           </div>
@@ -111,65 +113,6 @@ export default function LandingPage() {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Demo Preview Section */}
-      <div className="bg-gradient-to-b from-[#0a0f1a] to-[#05080F] py-24">
-        <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-[#C9A84C] mb-4">
-                See It In Action
-              </h2>
-              <p className="text-[#EEF2FF]/60">
-                Real-time transcription, sheet music rendering, and AI assistance
-              </p>
-            </div>
-            
-            <div className="bg-[#0a0f1a] rounded-lg border border-[#C9A84C]/20 p-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-sm text-[#EEF2FF]/60">Ready to record</span>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-[#05080F] rounded-lg border border-[#C9A84C]/10">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-[#EEF2FF]/80">Microphone Input</span>
-                        <div className="w-8 h-8 rounded-full bg-[#C9A84C]/20 flex items-center justify-center">
-                          <Mic size={14} className="text-[#C9A84C]" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-[#05080F] rounded-lg border border-[#C9A84C]/10">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-[#EEF2FF]/80">File Upload</span>
-                        <div className="w-8 h-8 rounded-full bg-[#C9A84C]/20 flex items-center justify-center">
-                          <Music size={14} className="text-[#C9A84C]" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="border-l border-[#C9A84C]/20 pl-6">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-[#C9A84C]">
-                      <Sparkles size={14} />
-                      <span>AI Assistant Ready</span>
-                    </div>
-                    <div className="p-3 bg-[#05080F] rounded-lg border border-[#C9A84C]/10">
-                      <p className="text-xs text-[#EEF2FF]/60">
-                        Ask me about chord progressions, arrangement ideas, or music theory...
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
