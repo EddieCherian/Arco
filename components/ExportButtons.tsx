@@ -10,13 +10,14 @@ interface ExportButtonsProps {
   midiData: MidiData;
 }
 
+const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
 export function ExportButtons({ midiData }: ExportButtonsProps) {
   const [isExporting, setIsExporting] = useState(false);
 
   const convertMidiToNoteName = (midiNumber: number): string => {
-    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const octave = Math.floor(midiNumber / 12) - 1;
-    const noteName = notes[midiNumber % 12];
+    const noteName = noteNames[midiNumber % 12];
     return `${noteName}${octave}`;
   };
 
@@ -39,14 +40,14 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
           yPos = 20;
         }
         pdf.text(
-          `${idx + 1}. Pitch: ${note.pitch} | Start: ${note.startTime.toFixed(2)}s | Duration: ${(note.endTime - note.startTime).toFixed(2)}s`,
+          `${idx + 1}. Pitch: ${note.pitch} (${convertMidiToNoteName(note.pitch)}) | Start: ${note.startTime.toFixed(2)}s | Duration: ${(note.endTime - note.startTime).toFixed(2)}s`,
           20,
           yPos
         );
         yPos += 8;
       });
       
-      pdf.save('arco-score.pdf');
+      pdf.save(`arco_score_${Date.now()}.pdf`);
     } catch (error) {
       console.error('PDF export failed:', error);
     } finally {
@@ -64,7 +65,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       midiData.notes.forEach(note => {
         const noteName = convertMidiToNoteName(note.pitch);
         track.addEvent(new MidiWriter.NoteEvent({
-          pitch: [noteName as any],
+          pitch: [noteName],
           duration: '4',
           velocity: note.velocity
         }));
@@ -75,7 +76,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       const url = URL.createObjectURL(midiBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'arocomposition.mid';
+      a.download = `arco_${Date.now()}.mid`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -95,7 +96,6 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       const buffer = audioContext.createBuffer(1, samples, sampleRate);
       const channelData = buffer.getChannelData(0);
       
-      // Generate simple sine waves for each note
       for (const note of midiData.notes) {
         const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
         const startSample = Math.floor(note.startTime * sampleRate);
@@ -108,7 +108,6 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
         }
       }
       
-      // Normalize
       let max = 0;
       for (let i = 0; i < samples; i++) {
         max = Math.max(max, Math.abs(channelData[i]));
@@ -119,12 +118,11 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
         }
       }
       
-      // Convert to WAV and download
       const wavBlob = audioBufferToWav(buffer);
       const url = URL.createObjectURL(wavBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'arocomposition.wav';
+      a.download = `arco_${Date.now()}.wav`;
       a.click();
       URL.revokeObjectURL(url);
       audioContext.close();
@@ -141,13 +139,12 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
     const format = 1;
     const bitDepth = 16;
     
-    let samples = buffer.getChannelData(0);
-    let dataLength = samples.length * (bitDepth / 8);
-    let bufferLength = 44 + dataLength;
+    const samples = buffer.getChannelData(0);
+    const dataLength = samples.length * (bitDepth / 8);
+    const bufferLength = 44 + dataLength;
     const arrayBuffer = new ArrayBuffer(bufferLength);
     const view = new DataView(arrayBuffer);
     
-    // WAV header
     writeString(view, 0, 'RIFF');
     view.setUint32(4, bufferLength - 8, true);
     writeString(view, 8, 'WAVE');
@@ -162,7 +159,6 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
     writeString(view, 36, 'data');
     view.setUint32(40, dataLength, true);
     
-    // Write samples
     let offset = 44;
     for (let i = 0; i < samples.length; i++) {
       const sample = Math.max(-1, Math.min(1, samples[i]));
@@ -218,7 +214,6 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       </attributes>`;
       
       midiData.notes.forEach(note => {
-        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         const noteName = noteNames[note.pitch % 12];
         const octave = Math.floor(note.pitch / 12) - 1;
         
@@ -228,7 +223,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
           <step>${noteName}</step>
           <octave>${octave}</octave>
         </pitch>
-        <duration>${Math.round((note.endTime - note.startTime) * 4)}</duration>
+        <duration>${Math.max(1, Math.round((note.endTime - note.startTime) * 4))}</duration>
         <voice>1</voice>
         <type>quarter</type>
       </note>`;
@@ -243,7 +238,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'arocomposition.musicxml';
+      a.download = `arco_${Date.now()}.musicxml`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -254,37 +249,37 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
   };
 
   return (
-    <div className="bg-[#0a0f1a] rounded-lg p-4 border border-[#C9A84C]/20">
-      <h3 className="text-lg font-semibold mb-3 text-[#C9A84C]">Export</h3>
-      <div className="grid grid-cols-2 gap-2">
+    <div className="bg-gradient-to-br from-[#0A0F1A] to-[#05080F] rounded-2xl border border-[#C9A84C]/20 p-6">
+      <h3 className="text-lg font-semibold mb-4 text-white">Export</h3>
+      <div className="grid grid-cols-2 gap-3">
         <button
           onClick={exportPDF}
-          disabled={isExporting}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
+          disabled={isExporting || midiData.notes.length === 0}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 hover:border-[#C9A84C]/30 transition-all duration-200 disabled:opacity-50"
         >
           <FileText size={16} />
           PDF
         </button>
         <button
           onClick={exportMIDI}
-          disabled={isExporting}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
+          disabled={isExporting || midiData.notes.length === 0}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 hover:border-[#C9A84C]/30 transition-all duration-200 disabled:opacity-50"
         >
           <Music size={16} />
           MIDI
         </button>
         <button
           onClick={exportAudio}
-          disabled={isExporting}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
+          disabled={isExporting || midiData.notes.length === 0}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 hover:border-[#C9A84C]/30 transition-all duration-200 disabled:opacity-50"
         >
           <Download size={16} />
           Audio
         </button>
         <button
           onClick={exportXML}
-          disabled={isExporting}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
+          disabled={isExporting || midiData.notes.length === 0}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 hover:border-[#C9A84C]/30 transition-all duration-200 disabled:opacity-50"
         >
           <Download size={16} />
           MusicXML
