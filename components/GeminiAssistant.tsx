@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles } from 'lucide-react';
 import { MidiData } from '@/lib/types';
 
@@ -10,22 +10,27 @@ interface GeminiAssistantProps {
 
 export function GeminiAssistant({ midiData }: GeminiAssistantProps) {
   const [message, setMessage] = useState('');
-  const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversation, setConversation] = useState<Array<{role: string, content: string}>>([]);
+  const [conversation, setConversation] = useState<Array<{ role: string; content: string }>>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversation, isLoading]);
 
   const sendMessage = async () => {
-    if (!message.trim()) return;
-    
+    if (!message.trim() || isLoading) return;
+    const userMsg = message.trim();
+    setMessage('');
     setIsLoading(true);
-    setConversation(prev => [...prev, { role: 'user', content: message }]);
-    
+    setConversation(prev => [...prev, { role: 'user', content: userMsg }]);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message,
+          message: userMsg,
           context: {
             key: midiData.key,
             tempo: midiData.tempo,
@@ -36,83 +41,107 @@ export function GeminiAssistant({ midiData }: GeminiAssistantProps) {
           }
         })
       });
-      
       const data = await res.json();
-      const aiResponse = data.response || 'Sorry, I could not process that request.';
-      
-      setConversation(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-      setResponse(aiResponse);
-    } catch (error) {
+      setConversation(prev => [...prev, { role: 'assistant', content: data.response || 'Could not process that request.' }]);
+    } catch {
       setConversation(prev => [...prev, { role: 'assistant', content: 'Error connecting to AI assistant.' }]);
     } finally {
       setIsLoading(false);
-      setMessage('');
     }
   };
 
+  const suggestions = [
+    'Suggest chords for this melody',
+    'What key am I playing in?',
+    'How can I improve this piece?',
+    'Suggest a time signature change',
+  ];
+
+  const css = `
+    .ai-wrap { display: flex; flex-direction: column; height: 580px; }
+    .ai-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; gap: 24px; }
+    .ai-empty-icon { width: 48px; height: 48px; border: 1px solid #C9A84C25; display: flex; align-items: center; justify-content: center; color: #C9A84C; opacity: 0.5; }
+    .ai-empty-title { font-family: 'Playfair Display', Georgia, serif; font-size: 18px; font-weight: 700; color: #EEF2FF; text-align: center; }
+    .ai-empty-title em { font-style: italic; color: #C9A84C; }
+    .ai-suggestions { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    .ai-suggestion { background: transparent; border: 1px solid #C9A84C15; padding: 10px 14px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #EEF2FF33; text-align: left; transition: border-color 0.2s, color 0.2s, background 0.2s; }
+    .ai-suggestion:hover { border-color: #C9A84C40; color: #EEF2FF88; background: #C9A84C06; }
+    .ai-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .ai-messages::-webkit-scrollbar { width: 3px; }
+    .ai-messages::-webkit-scrollbar-track { background: transparent; }
+    .ai-messages::-webkit-scrollbar-thumb { background: #C9A84C25; }
+    .ai-msg { padding: 14px 16px; position: relative; max-width: 90%; }
+    .ai-msg-user { background: #C9A84C08; border: 1px solid #C9A84C20; align-self: flex-end; }
+    .ai-msg-user::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 8px; height: 8px; border-bottom: 1px solid #C9A84C; border-right: 1px solid #C9A84C; }
+    .ai-msg-assistant { background: #080C14; border: 1px solid #C9A84C12; align-self: flex-start; }
+    .ai-msg-assistant::before { content: ''; position: absolute; top: -1px; left: -1px; width: 8px; height: 8px; border-top: 1px solid #C9A84C; border-left: 1px solid #C9A84C; opacity: 0.5; }
+    .ai-msg-role { font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: 0.25em; text-transform: uppercase; color: #C9A84C; opacity: 0.7; margin-bottom: 8px; }
+    .ai-msg-content { font-family: 'Crimson Pro', Georgia, serif; font-size: 15px; font-weight: 300; color: #EEF2FF99; line-height: 1.7; }
+    .ai-thinking { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border: 1px solid #C9A84C12; background: #080C14; align-self: flex-start; }
+    .ai-thinking-dot { width: 4px; height: 4px; background: #C9A84C; border-radius: 50%; animation: aidot 1.2s ease-in-out infinite; }
+    .ai-thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+    .ai-thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes aidot { 0%, 100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+    .ai-input-row { padding: 16px 20px; border-top: 1px solid #C9A84C12; display: flex; gap: 10px; align-items: center; }
+    .ai-input { flex: 1; background: transparent; border: none; border-bottom: 1px solid #C9A84C18; padding: 10px 0; font-family: 'Crimson Pro', Georgia, serif; font-size: 15px; font-style: italic; font-weight: 300; color: #EEF2FF99; outline: none; transition: border-color 0.2s, color 0.2s; }
+    .ai-input:focus { border-color: #C9A84C66; color: #EEF2FF; }
+    .ai-input::placeholder { color: #EEF2FF22; }
+    .ai-send { width: 36px; height: 36px; background: #C9A84C; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #05080F; flex-shrink: 0; transition: background 0.2s; }
+    .ai-send:hover:not(:disabled) { background: #E8C96A; }
+    .ai-send:disabled { opacity: 0.4; cursor: not-allowed; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+  `;
+
   return (
-    <div className="bg-[#0a0f1a] rounded-lg border border-[#C9A84C]/20 flex flex-col h-[600px]">
-      <div className="p-4 border-b border-[#C9A84C]/20 flex items-center gap-2">
-        <Sparkles size={18} className="text-[#C9A84C]" />
-        <h3 className="font-semibold text-[#C9A84C]">Gemini AI Assistant</h3>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {conversation.length === 0 ? (
-          <div className="text-center text-[#EEF2FF]/40 py-8">
-            <Sparkles size={32} className="mx-auto mb-3 opacity-50" />
-            <p className="text-sm">Ask me about:</p>
-            <ul className="text-xs mt-2 space-y-1">
-              <li>• Chord progressions for your melody</li>
-              <li>• Arrangement suggestions</li>
-              <li>• Music theory analysis</li>
-              <li>• Technical help with the platform</li>
-            </ul>
+    <>
+      <style>{css}</style>
+      <div className="ai-wrap">
+        {conversation.length === 0 && !isLoading ? (
+          <div className="ai-empty">
+            <div className="ai-empty-icon"><Sparkles size={20} /></div>
+            <p className="ai-empty-title">Ask <em>Arco</em> Anything</p>
+            <div className="ai-suggestions">
+              {suggestions.map((s, i) => (
+                <button key={i} className="ai-suggestion" onClick={() => { setMessage(s); }}>
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
-          conversation.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`p-3 rounded-lg ${
-                msg.role === 'user'
-                  ? 'bg-[#C9A84C]/10 border border-[#C9A84C]/20 ml-8'
-                  : 'bg-[#05080F] border border-[#C9A84C]/10 mr-8'
-              }`}
-            >
-              <p className="text-xs text-[#C9A84C] mb-1">
-                {msg.role === 'user' ? 'You' : 'Arco AI'}
-              </p>
-              <p className="text-sm text-[#EEF2FF]">{msg.content}</p>
-            </div>
-          ))
-        )}
-        {isLoading && (
-          <div className="flex items-center gap-2 text-[#C9A84C] p-3">
-            <Loader2 size={16} className="animate-spin" />
-            <span className="text-sm">Thinking...</span>
+          <div className="ai-messages">
+            {conversation.map((msg, idx) => (
+              <div key={idx} className={`ai-msg ${msg.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}`}>
+                <div className="ai-msg-role">{msg.role === 'user' ? 'You' : 'Arco AI'}</div>
+                <div className="ai-msg-content">{msg.content}</div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="ai-thinking">
+                <div className="ai-thinking-dot" />
+                <div className="ai-thinking-dot" />
+                <div className="ai-thinking-dot" />
+              </div>
+            )}
+            <div ref={bottomRef} />
           </div>
         )}
-      </div>
-      
-      <div className="p-4 border-t border-[#C9A84C]/20">
-        <div className="flex gap-2">
+
+        <div className="ai-input-row">
           <input
+            className="ai-input"
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             placeholder="Ask for musical suggestions..."
-            className="flex-1 px-4 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] placeholder-[#EEF2FF]/30 focus:border-[#C9A84C] focus:outline-none"
           />
-          <button
-            onClick={sendMessage}
-            disabled={isLoading || !message.trim()}
-            className="px-4 py-2 bg-[#C9A84C] text-[#05080F] rounded-lg hover:bg-[#b8943a] transition-colors disabled:opacity-50"
-          >
-            <Send size={18} />
+          <button className="ai-send" onClick={sendMessage} disabled={isLoading || !message.trim()}>
+            {isLoading ? <Loader2 size={14} className="spin" /> : <Send size={14} />}
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
