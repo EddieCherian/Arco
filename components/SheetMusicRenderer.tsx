@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import VexFlow from 'vexflow';
 import { MidiData } from '@/lib/types';
 
-const { Renderer, Stave, StaveNote, Voice, Formatter, Accidental } = VexFlow;
+const { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, StaveConnector } = VexFlow;
 
 interface SheetMusicRendererProps {
   midiData: MidiData;
@@ -17,7 +17,7 @@ const midiToNoteName = (midi: number): string => {
   return `${notes[midi % 12]}/${octave}`;
 };
 
-// 🔥 NEW: group notes by time (for chords)
+// 🔥 group notes by time (for chords)
 const groupNotes = (notes: any[]) => {
   const groups: any[] = [];
   const threshold = 0.05;
@@ -51,74 +51,112 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       canvasRef.current.innerHTML = '';
 
       const renderer = new Renderer(canvasRef.current, Renderer.Backends.SVG);
-      renderer.resize(820, 220);
+      renderer.resize(820, 260);
       const context = renderer.getContext();
 
-      const stave = new Stave(20, 50, 780);
-      stave.addClef(midiData.clef || 'treble');
-      stave.addTimeSignature(`${midiData.timeSignature[0]}/${midiData.timeSignature[1]}`);
-      stave.setContext(context).draw();
+      // 🔥 SPLIT NOTES BY CLEF
+      const trebleRaw = midiData.notes.filter(n => n.clef !== 'bass');
+      const bassRaw = midiData.notes.filter(n => n.clef === 'bass');
 
-      const maxNotes = Math.min(midiData.notes.length, 24);
+      const maxNotes = 24;
 
-      // 🔥 GROUP NOTES INTO CHORDS
-      const groups = groupNotes(midiData.notes.slice(0, maxNotes));
+      const trebleGroups = groupNotes(trebleRaw.slice(0, maxNotes));
+      const bassGroups = groupNotes(bassRaw.slice(0, maxNotes));
 
-      const notes = groups.map((group, idx) => {
-        const keys: string[] = [];
-        const accidentals: { index: number; type: string }[] = [];
+      // 🎼 CREATE STAVES
+      const trebleStave = new Stave(20, 40, 780);
+      trebleStave.addClef('treble');
+      trebleStave.addTimeSignature(`${midiData.timeSignature[0]}/${midiData.timeSignature[1]}`);
+      trebleStave.setContext(context).draw();
 
-        group.forEach((note, i) => {
-          const noteName = midiToNoteName(note.pitch);
+      const bassStave = new Stave(20, 140, 780);
+      bassStave.addClef('bass');
+      bassStave.addTimeSignature(`${midiData.timeSignature[0]}/${midiData.timeSignature[1]}`);
+      bassStave.setContext(context).draw();
 
-          if (noteName.includes('#')) {
-            keys.push(noteName.replace('#', ''));
-            accidentals.push({ index: i, type: '#' });
-          } else {
-            keys.push(noteName);
-          }
-        });
+      // 🔥 CONNECT THEM (PIANO STYLE)
+      new StaveConnector(trebleStave, bassStave)
+        .setType('brace')
+        .setContext(context)
+        .draw();
 
-        const vexNote = new StaveNote({
-          keys,
-          duration: 'q',
-          auto_stem: true,
-        });
+      // 🎹 BUILD NOTES FUNCTION
+      const buildNotes = (groups: any[], clef: 'treble' | 'bass') => {
+        return groups.map((group, idx) => {
+          const keys: string[] = [];
+          const accidentals: { index: number; type: string }[] = [];
 
-        // apply accidentals correctly
-        accidentals.forEach(acc => {
-          vexNote.addModifier(new Accidental(acc.type), acc.index);
-        });
+          group.forEach((note, i) => {
+            const noteName = midiToNoteName(note.pitch);
 
-        // highlight (approximate: highlight first note in group)
-        if (idx === currentNoteIndex) {
-          vexNote.setStyle({
-            fillStyle: '#C9A84C',
-            strokeStyle: '#C9A84C',
+            if (noteName.includes('#')) {
+              keys.push(noteName.replace('#', ''));
+              accidentals.push({ index: i, type: '#' });
+            } else {
+              keys.push(noteName);
+            }
           });
-        }
 
-        return vexNote;
-      });
+          const vexNote = new StaveNote({
+            keys,
+            duration: 'q',
+            clef,
+            auto_stem: true,
+          });
+
+          accidentals.forEach(acc => {
+            vexNote.addModifier(new Accidental(acc.type), acc.index);
+          });
+
+          if (idx === currentNoteIndex) {
+            vexNote.setStyle({
+              fillStyle: '#C9A84C',
+              strokeStyle: '#C9A84C',
+            });
+          }
+
+          return vexNote;
+        });
+      };
+
+      const trebleNotes = buildNotes(trebleGroups, 'treble');
+      const bassNotes = buildNotes(bassGroups, 'bass');
 
       // pad with rests
-      while (notes.length % 4 !== 0) {
-        notes.push(new StaveNote({ keys: ['b/4'], duration: 'qr' }));
-      }
+      const padNotes = (notes: any[], clef: 'treble' | 'bass') => {
+        while (notes.length % 4 !== 0) {
+          notes.push(new StaveNote({ keys: ['b/4'], duration: 'qr', clef }));
+        }
+      };
 
-      const voice = new Voice({
+      padNotes(trebleNotes, 'treble');
+      padNotes(bassNotes, 'bass');
+
+      // 🎼 VOICES
+      const trebleVoice = new Voice({
         num_beats: 4,
         beat_value: 4,
-      });
+      }).setStrict(false);
 
-      voice.setStrict(false);
-      voice.addTickables(notes);
+      const bassVoice = new Voice({
+        num_beats: 4,
+        beat_value: 4,
+      }).setStrict(false);
+
+      trebleVoice.addTickables(trebleNotes);
+      bassVoice.addTickables(bassNotes);
+
+      // 🎯 FORMAT + DRAW
+      new Formatter()
+        .joinVoices([trebleVoice])
+        .formatToStave([trebleVoice], trebleStave, { padding: 20 });
 
       new Formatter()
-        .joinVoices([voice])
-        .formatToStave([voice], stave, { padding: 20 });
+        .joinVoices([bassVoice])
+        .formatToStave([bassVoice], bassStave, { padding: 20 });
 
-      voice.draw(context, stave);
+      trebleVoice.draw(context, trebleStave);
+      bassVoice.draw(context, bassStave);
 
     } catch (err) {
       console.error('Sheet music render error:', err);
@@ -126,7 +164,7 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
   }, [midiData, currentNoteIndex]);
 
   const css = `
-    .sheet-wrap { width: 100%; overflow-x: auto; min-height: 220px; }
+    .sheet-wrap { width: 100%; overflow-x: auto; min-height: 260px; }
 
     .sheet-wrap svg {
       width: 100%;
