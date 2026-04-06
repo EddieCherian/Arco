@@ -20,7 +20,7 @@ export class AudioProcessor {
     };
   }
   
-  private static detectOnsets(audioData: Float32Array, sampleRate: number): number[] {
+  static detectOnsets(audioData: Float32Array, sampleRate: number): number[] {
     const onsets: number[] = [];
     const windowSize = Math.floor(sampleRate * 0.05); // 50ms window
     const threshold = 0.02;
@@ -42,7 +42,7 @@ export class AudioProcessor {
     return onsets;
   }
   
-  private static extractNotes(audioData: Float32Array, sampleRate: number, onsets: number[]): Array<{pitch: number, startTime: number, endTime: number, velocity: number}> {
+  static extractNotes(audioData: Float32Array, sampleRate: number, onsets: number[]): Array<{pitch: number, startTime: number, endTime: number, velocity: number}> {
     const notes = [];
     
     for (let i = 0; i < onsets.length - 1; i++) {
@@ -115,7 +115,7 @@ export class AudioProcessor {
     return 440; // Default to A4
   }
   
-  private static frequencyToMidi(frequency: number): number {
+  static frequencyToMidi(frequency: number): number {
     return 69 + 12 * Math.log2(frequency / 440);
   }
   
@@ -164,7 +164,7 @@ export class HumModeProcessor extends AudioProcessor {
     };
   }
   
-  private static detectOnsetsHumming(audioData: Float32Array, sampleRate: number): number[] {
+  static detectOnsetsHumming(audioData: Float32Array, sampleRate: number): number[] {
     const onsets: number[] = [];
     const windowSize = Math.floor(sampleRate * 0.03); // 30ms window for faster detection
     const threshold = 0.01; // Lower threshold for humming
@@ -186,7 +186,7 @@ export class HumModeProcessor extends AudioProcessor {
     return onsets;
   }
   
-  private static extractNotesHumming(audioData: Float32Array, sampleRate: number, onsets: number[]): Array<{pitch: number, startTime: number, endTime: number, velocity: number}> {
+  static extractNotesHumming(audioData: Float32Array, sampleRate: number, onsets: number[]): Array<{pitch: number, startTime: number, endTime: number, velocity: number}> {
     const notes = [];
     
     for (let i = 0; i < onsets.length; i++) {
@@ -232,7 +232,7 @@ export class HumModeProcessor extends AudioProcessor {
     return notes;
   }
   
-  private static detectKey(notes: Array<{pitch: number}>): string {
+  static detectKey(notes: Array<{pitch: number}>): string {
     if (notes.length === 0) return 'C';
     
     const majorKeys = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
