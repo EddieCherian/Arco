@@ -22,8 +22,8 @@ export function PlaybackControls({
   const [isLooping, setIsLooping] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(-6);
-  const synthRef = useRef<Tone.PolySynth | null>(null);
-  const scheduleIdsRef = useRef<number[]>([]);
+  const synthRef = useRef<any>(null);
+  const scheduleIdsRef = useRef<string[]>([]);
   
   useEffect(() => {
     const synth = new Tone.PolySynth(Tone.Synth).toDestination();
@@ -62,13 +62,13 @@ export function PlaybackControls({
       
       const nextTime = time + (note.endTime - note.startTime);
       const scheduleId = Tone.Transport.schedule((t) => scheduleNote(t, index + 1), nextTime);
-      scheduleIdsRef.current.push(scheduleId);
+      scheduleIdsRef.current.push(scheduleId as string);
     };
     
     const scheduleId = Tone.Transport.schedule((time) => {
       scheduleNote(time, currentNoteIndex);
     }, 0);
-    scheduleIdsRef.current.push(scheduleId);
+    scheduleIdsRef.current.push(scheduleId as string);
     
     Tone.Transport.start();
     setIsPlaying(true);
@@ -78,7 +78,6 @@ export function PlaybackControls({
   const stop = () => {
     Tone.Transport.stop();
     Tone.Transport.cancel();
-    scheduleIdsRef.current.forEach(id => Tone.Transport.clear(id));
     scheduleIdsRef.current = [];
     setIsPlaying(false);
     if (onPlaybackStop) onPlaybackStop();
