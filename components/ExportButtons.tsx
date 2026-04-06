@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { Download, FileText, Music } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as MidiWriter from 'midi-writer-js';
-import * as Tone from 'tone';
-import JSZip from 'jszip';
 import { MidiData } from '@/lib/types';
 
 interface ExportButtonsProps {
@@ -54,12 +52,13 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
     try {
       const track = new MidiWriter.Track();
       track.setTempo(midiData.tempo);
-      track.addTimeSignature(midiData.timeSignature[0], midiData.timeSignature[1]);
+      track.setTimeSignature(midiData.timeSignature[0], midiData.timeSignature[1]);
       
       midiData.notes.forEach(note => {
+        const duration = ((note.endTime - note.startTime) * 1000) / 60;
         track.addEvent(new MidiWriter.NoteEvent({
           pitch: [note.pitch],
-          duration: (note.endTime - note.startTime) * 1000,
+          duration: '4',
           velocity: note.velocity
         }));
       });
@@ -82,29 +81,95 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
   const exportMP3 = async () => {
     setIsExporting(true);
     try {
-      await Tone.start();
-      const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+      // Simple MP3 export using Web Audio API recording
+      const audioContext = new AudioContext();
       const duration = Math.max(...midiData.notes.map(n => n.endTime), 1);
+      const sampleRate = audioContext.sampleRate;
+      const samples = duration * sampleRate;
+      const buffer = audioContext.createBuffer(1, samples, sampleRate);
+      const channelData = buffer.getChannelData(0);
       
-      const buffer = await Tone.Offline(() => {
-        midiData.notes.forEach(note => {
-          const freq = Tone.Frequency(note.pitch, 'midi').toFrequency();
-          synth.triggerAttackRelease(freq, note.endTime - note.startTime, note.startTime);
-        });
-      }, duration);
+      // Generate simple sine waves for each note
+      for (const note of midiData.notes) {
+        const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
+        const startSample = Math.floor(note.startTime * sampleRate);
+        const endSample = Math.floor(note.endTime * sampleRate);
+        
+        for (let i = startSample; i < endSample && i < samples; i++) {
+          const t = (i - startSample) / sampleRate;
+          const envelope = Math.exp(-t * 5);
+          channelData[i] += Math.sin(2 * Math.PI * frequency * t) * envelope * (note.velocity / 127);
+        }
+      }
       
-      const audioBlob = await buffer.convertToBlob();
-      const url = URL.createObjectURL(audioBlob);
+      // Normalize
+      let max = 0;
+      for (let i = 0; i < samples; i++) {
+        max = Math.max(max, Math.abs(channelData[i]));
+      }
+      if (max > 0) {
+        for (let i = 0; i < samples; i++) {
+          channelData[i] /= max;
+        }
+      }
+      
+      // Convert to WAV and download
+      const wavBlob = audioBufferToWav(buffer);
+      const url = URL.createObjectURL(wavBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'arocomposition.mp3';
+      a.download = 'arocomposition.wav';
       a.click();
       URL.revokeObjectURL(url);
-      synth.dispose();
+      audioContext.close();
     } catch (error) {
-      console.error('MP3 export failed:', error);
+      console.error('Audio export failed:', error);
     } finally {
       setIsExporting(false);
+    }
+  };
+  
+  const audioBufferToWav = (buffer: AudioBuffer): Blob => {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1;
+    const bitDepth = 16;
+    
+    let samples = buffer.getChannelData(0);
+    let dataLength = samples.length * (bitDepth / 8);
+    let bufferLength = 44 + dataLength;
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, bufferLength - 8, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+    view.setUint16(32, numChannels * (bitDepth / 8), true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+    
+    // Write samples
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const sample = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+    
+    return new Blob([view], { type: 'audio/wav' });
+  };
+  
+  const writeString = (view: DataView, offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
     }
   };
 
@@ -208,7 +273,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
           className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
         >
           <Download size={16} />
-          MP3
+          Audio
         </button>
         <button
           onClick={exportXML}
