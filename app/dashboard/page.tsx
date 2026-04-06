@@ -109,7 +109,7 @@ export default function DashboardPage() {
         shared: false
       });
       toast.success('Saved to library');
-    } catch (e) {
+    } catch {
       toast.error('Failed to save');
     } finally {
       setIsSaving(false);
@@ -134,7 +134,7 @@ export default function DashboardPage() {
       });
       await navigator.clipboard.writeText(`${window.location.origin}/share/${shareId}`);
       toast.success('Share link copied');
-    } catch (e) {
+    } catch {
       toast.error('Failed to share');
     } finally {
       setIsSaving(false);
@@ -152,13 +152,13 @@ export default function DashboardPage() {
       --body: 'Crimson Pro', Georgia, serif;
     }
     .dash-root { display: flex; min-height: 100vh; background: var(--bg); color: var(--text); }
-    .dash-main { flex: 1; margin-left: 288px; padding: 48px; }
+    .dash-main { flex: 1; margin-left: 0; padding: 88px 48px 48px; }
     .dash-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid var(--gold-border); }
     .dash-title { font-family: var(--serif); font-size: 48px; font-weight: 900; color: var(--text); line-height: 1; margin-bottom: 6px; }
     .dash-title em { font-style: italic; color: var(--gold); }
     .dash-subtitle { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-muted); }
-    .dash-actions { display: flex; align-items: center; gap: 12px; }
-    .piece-name-input { background: transparent; border: none; border-bottom: 1px solid var(--gold-border); padding: 8px 0; font-family: var(--body); font-size: 16px; font-style: italic; color: var(--text-muted); outline: none; width: 220px; transition: border-color 0.2s, color 0.2s; }
+    .dash-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .piece-name-input { background: transparent; border: none; border-bottom: 1px solid var(--gold-border); padding: 8px 0; font-family: var(--body); font-size: 16px; font-style: italic; color: var(--text-muted); outline: none; width: 180px; transition: border-color 0.2s, color 0.2s; }
     .piece-name-input:focus { border-color: var(--gold); color: var(--text); }
     .piece-name-input::placeholder { color: var(--text-dim); }
     .btn-save { display: flex; align-items: center; gap: 8px; padding: 10px 24px; background: var(--gold); color: var(--bg); border: none; cursor: pointer; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; transition: background 0.2s; }
@@ -169,7 +169,7 @@ export default function DashboardPage() {
     .btn-share:disabled { opacity: 0.4; cursor: not-allowed; }
     .dash-grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; }
     .dash-left { display: flex; flex-direction: column; gap: 20px; }
-    .dash-right { display: flex; flex-direction: column; gap: 20px; position: sticky; top: 48px; }
+    .dash-right { display: flex; flex-direction: column; gap: 20px; position: sticky; top: 88px; }
     .panel { border: 1px solid var(--gold-border); background: var(--surface); position: relative; }
     .panel::before { content: ''; position: absolute; top: -1px; left: -1px; width: 12px; height: 12px; border-top: 1px solid var(--gold); border-left: 1px solid var(--gold); opacity: 0.6; }
     .panel::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 12px; height: 12px; border-bottom: 1px solid var(--gold); border-right: 1px solid var(--gold); opacity: 0.6; }
@@ -189,15 +189,19 @@ export default function DashboardPage() {
     .empty-title { font-family: var(--serif); font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
     .empty-title em { font-style: italic; color: var(--gold); }
     .empty-desc { font-family: var(--body); font-size: 16px; font-weight: 300; font-style: italic; color: var(--text-muted); }
-    .section-divider { display: flex; align-items: center; gap: 16px; }
-    .section-divider-line { flex: 1; height: 1px; background: var(--gold-border); }
-    .section-divider-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-dim); }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 1024px) {
-      .dash-main { margin-left: 0; padding: 24px; }
+      .dash-main { padding: 88px 20px 40px; }
       .dash-grid { grid-template-columns: 1fr; }
       .dash-right { position: static; }
-      .dash-header { flex-direction: column; gap: 20px; }
+      .dash-header { flex-direction: column; gap: 16px; }
+      .controls-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .dash-title { font-size: 32px; }
+      .dash-actions { width: 100%; }
+      .piece-name-input { width: 100%; }
+      .btn-save, .btn-share { flex: 1; justify-content: center; }
     }
   `;
 
@@ -253,16 +257,12 @@ export default function DashboardPage() {
                 <>
                   <div className="panel">
                     <div className="panel-header"><span className="panel-label">Sheet Music</span></div>
-                    <div className="panel-body">
-                      <SheetMusicRenderer midiData={midiData} />
-                    </div>
+                    <div className="panel-body"><SheetMusicRenderer midiData={midiData} /></div>
                   </div>
 
                   <div className="panel">
                     <div className="panel-header"><span className="panel-label">Playback</span></div>
-                    <div className="panel-body">
-                      <PlaybackControls midiData={midiData} />
-                    </div>
+                    <div className="panel-body"><PlaybackControls midiData={midiData} /></div>
                   </div>
 
                   <div className="controls-grid">
