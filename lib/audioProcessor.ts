@@ -1,22 +1,13 @@
 import { MidiData } from './types';
 import { runBasicPitch } from './basicPitch';
 import { cleanAndStabilizeNotes } from './noteCleaner';
-
-// 🔥 TEMP bass generator (replace with AI later)
-function generateBassFromMelody(melody: any[]) {
-  return melody.map((n: any) => ({
-    pitch: 36, // C2 (safe bass note)
-    startTime: n.startTime,
-    endTime: n.endTime,
-    velocity: 80,
-  }));
-}
+import { generateBassFromAI } from './musicAI'; // 🔥 USE AI
 
 export class AudioProcessor {
   static async transcribeAudio(audioBuffer: AudioBuffer): Promise<MidiData> {
     console.log('🎧 Starting transcription...');
 
-    // 🔥 RUN BASIC PITCH
+    // 🎧 STEP 1: detect notes
     const rawNotes = await runBasicPitch(audioBuffer);
     console.log('🧠 Raw notes:', rawNotes?.slice(0, 10));
 
@@ -24,7 +15,7 @@ export class AudioProcessor {
       throw new Error('No notes detected.');
     }
 
-    // 🔥 CLEAN + STABILIZE
+    // 🧼 STEP 2: clean notes
     const cleanedNotes = cleanAndStabilizeNotes(rawNotes);
     console.log('✨ Cleaned notes:', cleanedNotes.slice(0, 10));
 
@@ -38,18 +29,26 @@ export class AudioProcessor {
       startTime: n.startTime,
       endTime: n.endTime,
       velocity: n.velocity ?? 100,
+      clef: 'treble', // 🔥 IMPORTANT
     }));
 
-    // 🎵 BASS (for second clef)
-    const bassNotes = generateBassFromMelody(melodyNotes);
+    // 🤖 BASS (AI GENERATED)
+    const aiBass = await generateBassFromAI(melodyNotes);
 
-    // 🔥 RETURN BOTH CLEFS
+    const bassNotes = aiBass.map((n: any) => ({
+      ...n,
+      clef: 'bass', // 🔥 IMPORTANT
+    }));
+
+    // 🎼 MERGE INTO ONE ARRAY (THIS FIXES YOUR WHOLE APP)
+    const allNotes = [...melodyNotes, ...bassNotes];
+
     return {
-      treble: melodyNotes,
-      bass: bassNotes,
+      notes: allNotes,
       tempo: 120,
       timeSignature: [4, 4],
       key: 'C',
+      clef: 'treble',
       instrument: 'piano',
       octaveShift: 0,
     };
