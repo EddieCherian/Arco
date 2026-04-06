@@ -17,6 +17,30 @@ const midiToNoteName = (midi: number): string => {
   return `${notes[midi % 12]}/${octave}`;
 };
 
+// 🔥 NEW: group notes by time (for chords)
+const groupNotes = (notes: any[]) => {
+  const groups: any[] = [];
+  const threshold = 0.05;
+
+  const sorted = [...notes].sort((a, b) => a.startTime - b.startTime);
+
+  for (const note of sorted) {
+    let placed = false;
+
+    for (const group of groups) {
+      if (Math.abs(group[0].startTime - note.startTime) < threshold) {
+        group.push(note);
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) groups.push([note]);
+  }
+
+  return groups;
+};
+
 export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMusicRendererProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -35,23 +59,38 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       stave.addTimeSignature(`${midiData.timeSignature[0]}/${midiData.timeSignature[1]}`);
       stave.setContext(context).draw();
 
-      const maxNotes = Math.min(midiData.notes.length, 12);
+      const maxNotes = Math.min(midiData.notes.length, 24);
 
-      const notes = midiData.notes.slice(0, maxNotes).map((note, idx) => {
-        const noteName = midiToNoteName(note.pitch);
+      // 🔥 GROUP NOTES INTO CHORDS
+      const groups = groupNotes(midiData.notes.slice(0, maxNotes));
+
+      const notes = groups.map((group, idx) => {
+        const keys: string[] = [];
+        const accidentals: { index: number; type: string }[] = [];
+
+        group.forEach((note, i) => {
+          const noteName = midiToNoteName(note.pitch);
+
+          if (noteName.includes('#')) {
+            keys.push(noteName.replace('#', ''));
+            accidentals.push({ index: i, type: '#' });
+          } else {
+            keys.push(noteName);
+          }
+        });
 
         const vexNote = new StaveNote({
-          keys: [noteName.replace('#', '')],
+          keys,
           duration: 'q',
           auto_stem: true,
         });
 
-        // cleaner accidental handling
-        if (noteName.includes('#')) {
-          vexNote.addModifier(new Accidental('#'), 0);
-        }
+        // apply accidentals correctly
+        accidentals.forEach(acc => {
+          vexNote.addModifier(new Accidental(acc.type), acc.index);
+        });
 
-        // highlight current note
+        // highlight (approximate: highlight first note in group)
         if (idx === currentNoteIndex) {
           vexNote.setStyle({
             fillStyle: '#C9A84C',
@@ -62,7 +101,7 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
         return vexNote;
       });
 
-      // pad cleanly with rests
+      // pad with rests
       while (notes.length % 4 !== 0) {
         notes.push(new StaveNote({ keys: ['b/4'], duration: 'qr' }));
       }
@@ -94,19 +133,16 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       height: auto;
     }
 
-    /* staff lines clearer */
     .sheet-wrap svg path,
     .sheet-wrap svg rect {
       stroke: #EEF2FFAA;
     }
 
-    /* note heads + stems brighter */
     .sheet-wrap svg g path {
       fill: #EEF2FF;
       stroke: #EEF2FF;
     }
 
-    /* text (tempo, etc) */
     .sheet-wrap svg text {
       fill: #EEF2FF;
       font-size: 12px;
