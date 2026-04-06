@@ -119,7 +119,7 @@ export class AudioProcessor {
     return 69 + 12 * Math.log2(frequency / 440);
   }
   
-  private static estimateTempo(onsets: number[], sampleRate: number): number {
+  public static estimateTempo(onsets: number[], sampleRate: number): number {
     if (onsets.length < 2) return 120;
     
     const intervals = [];
