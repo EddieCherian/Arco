@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import * as Tone from 'tone';
 import { Play, Pause, Square, Repeat, Volume2 } from 'lucide-react';
 import { MidiData } from '@/lib/types';
 
@@ -21,82 +20,108 @@ export function PlaybackControls({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [volume, setVolume] = useState(-6);
-  const synthRef = useRef<any>(null);
+  const [volume, setVolume] = useState(0.5);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const currentNoteIndexRef = useRef(0);
   const isPlayingRef = useRef(false);
+  const scheduledTimesRef = useRef<number[]>([]);
   
   useEffect(() => {
-    // Initialize synth
-    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    synthRef.current = synth;
+    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     
     return () => {
-      if (synthRef.current) {
-        synthRef.current.dispose();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
     };
   }, []);
   
   const stopPlayback = () => {
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
+    if (audioContextRef.current) {
+      // Cancel all scheduled sounds
+      scheduledTimesRef.current.forEach(time => {
+        // Can't easily cancel scheduled events, so we just stop the context
+      });
+      audioContextRef.current.close();
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
     setIsPlaying(false);
     isPlayingRef.current = false;
     currentNoteIndexRef.current = 0;
     if (onPlaybackStop) onPlaybackStop();
   };
   
+  const playNote = (pitch: number, startTime: number, duration: number, velocity: number) => {
+    if (!audioContextRef.current || !isPlayingRef.current) return;
+    
+    const now = audioContextRef.current.currentTime;
+    const scheduleTime = Math.max(now, startTime / speed);
+    
+    const oscillator = audioContextRef.current.createOscillator();
+    const gainNode = audioContextRef.current.createGain();
+    
+    const frequency = 440 * Math.pow(2, (pitch - 69) / 12);
+    oscillator.frequency.value = frequency;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.value = velocity / 127 * volume;
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContextRef.current.destination);
+    
+    oscillator.start(scheduleTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, scheduleTime + duration);
+    oscillator.stop(scheduleTime + duration);
+  };
+  
   const scheduleNotes = () => {
-    let currentTime = 0;
+    if (!audioContextRef.current) return;
+    
+    let currentTime = audioContextRef.current.currentTime;
     
     for (let i = 0; i < midiData.notes.length; i++) {
       const note = midiData.notes[i];
-      const duration = note.endTime - note.startTime;
-      const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
+      const duration = (note.endTime - note.startTime) / speed;
       
-      Tone.Transport.schedule((time) => {
-        if (synthRef.current && isPlayingRef.current) {
-          synthRef.current.triggerAttackRelease(frequency, duration, time);
+      setTimeout(() => {
+        if (isPlayingRef.current) {
+          playNote(note.pitch, performance.now() / 1000, duration, note.velocity);
           if (onCurrentNoteChange) {
             onCurrentNoteChange(i);
           }
         }
-      }, currentTime);
+      }, currentTime * 1000);
       
       currentTime += duration;
     }
     
-    // Schedule loop if enabled
+    // Schedule loop
     if (isLooping) {
-      Tone.Transport.schedule(() => {
+      setTimeout(() => {
         if (isPlayingRef.current && isLooping) {
           scheduleNotes();
         }
-      }, currentTime);
+      }, currentTime * 1000);
     }
   };
   
   const startPlayback = async () => {
-    await Tone.start();
-    Tone.Transport.bpm.value = midiData.tempo * speed;
-    Tone.Destination.volume.value = volume;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
     
+    await audioContextRef.current.resume();
     isPlayingRef.current = true;
     currentNoteIndexRef.current = 0;
     
     scheduleNotes();
-    Tone.Transport.start();
     setIsPlaying(true);
     if (onPlaybackStart) onPlaybackStart();
   };
   
   const pausePlayback = () => {
-    Tone.Transport.pause();
-    setIsPlaying(false);
     isPlayingRef.current = false;
+    setIsPlaying(false);
   };
   
   return (
@@ -138,14 +163,11 @@ export function PlaybackControls({
           <Volume2 size={16} className="text-[#EEF2FF]/60" />
           <input
             type="range"
-            min="-60"
-            max="6"
+            min="0"
+            max="1"
+            step="0.01"
             value={volume}
-            onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setVolume(val);
-              Tone.Destination.volume.value = val;
-            }}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
             className="w-24"
           />
         </div>
@@ -159,11 +181,7 @@ export function PlaybackControls({
             step="0.01"
             value={speed}
             onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setSpeed(val);
-              if (isPlaying) {
-                Tone.Transport.bpm.value = midiData.tempo * val;
-              }
+              setSpeed(parseFloat(e.target.value));
             }}
             className="w-24"
           />
