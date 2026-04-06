@@ -1,4 +1,9 @@
-import { BasicPitch, noteFramesToTime, addPitchBendsToNoteEvents, outputToNotesPoly } from '@spotify/basic-pitch';
+import {
+  BasicPitch,
+  noteFramesToTime,
+  addPitchBendsToNoteEvents,
+  outputToNotesMono
+} from '@spotify/basic-pitch';
 
 let modelInstance: BasicPitch | null = null;
 
@@ -16,6 +21,26 @@ export interface BasicPitchNote {
   amplitude?: number;
 }
 
+// 🔥 Convert to mono (IMPORTANT)
+function toMono(audioBuffer: AudioBuffer): AudioBuffer {
+  if (audioBuffer.numberOfChannels === 1) return audioBuffer;
+
+  const mono = new Float32Array(audioBuffer.length);
+
+  for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+    const data = audioBuffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      mono[i] += data[i] / audioBuffer.numberOfChannels;
+    }
+  }
+
+  const ctx = new AudioContext();
+  const newBuffer = ctx.createBuffer(1, mono.length, audioBuffer.sampleRate);
+  newBuffer.copyToChannel(mono, 0);
+
+  return newBuffer;
+}
+
 export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<BasicPitchNote[]> {
   const frames: number[][] = [];
   const onsets: number[][] = [];
@@ -23,8 +48,11 @@ export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<BasicPitc
 
   const model = await getModel();
 
+  // 🔥 FORCE MONO INPUT
+  const monoBuffer = toMono(audioBuffer);
+
   await model.evaluateModel(
-    audioBuffer,
+    monoBuffer,
     (f: number[][], o: number[][], c: number[][]) => {
       frames.push(...f);
       onsets.push(...o);
@@ -37,10 +65,11 @@ export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<BasicPitc
     throw new Error('No audio data detected.');
   }
 
+  // 🔥 MUCH STRICTER + MONO MODE
   const rawNotes = noteFramesToTime(
     addPitchBendsToNoteEvents(
       contours,
-      outputToNotesPoly(frames, onsets, 0.6, 0.6, 5)
+      outputToNotesMono(frames, onsets, 0.95, 0.95)
     )
   );
 
