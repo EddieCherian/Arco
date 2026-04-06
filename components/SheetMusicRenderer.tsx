@@ -17,7 +17,7 @@ const midiToNoteName = (midi: number): string => {
   return `${notes[midi % 12]}/${octave}`;
 };
 
-// 🔥 group notes by time (for chords)
+// group notes by time (for chords)
 const groupNotes = (notes: any[]) => {
   const groups: any[] = [];
   const threshold = 0.05;
@@ -54,7 +54,7 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       renderer.resize(820, 260);
       const context = renderer.getContext();
 
-      // 🔥 SPLIT NOTES BY CLEF
+      // SPLIT NOTES BY CLEF
       const trebleRaw = midiData.notes.filter(n => n.clef !== 'bass');
       const bassRaw = midiData.notes.filter(n => n.clef === 'bass');
 
@@ -63,7 +63,7 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       const trebleGroups = groupNotes(trebleRaw.slice(0, maxNotes));
       const bassGroups = groupNotes(bassRaw.slice(0, maxNotes));
 
-      // 🎼 CREATE STAVES
+      // CREATE STAVES
       const trebleStave = new Stave(20, 40, 780);
       trebleStave.addClef('treble');
       trebleStave.addTimeSignature(`${midiData.timeSignature[0]}/${midiData.timeSignature[1]}`);
@@ -74,13 +74,13 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       bassStave.addTimeSignature(`${midiData.timeSignature[0]}/${midiData.timeSignature[1]}`);
       bassStave.setContext(context).draw();
 
-      // 🔥 CONNECT THEM (PIANO STYLE)
+      // CONNECT THEM (PIANO STYLE)
       new StaveConnector(trebleStave, bassStave)
         .setType('brace')
         .setContext(context)
         .draw();
 
-      // 🎹 BUILD NOTES FUNCTION
+      // BUILD NOTES FUNCTION
       const buildNotes = (groups: any[], clef: 'treble' | 'bass') => {
         return groups.map((group, idx) => {
           const keys: string[] = [];
@@ -132,7 +132,7 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       padNotes(trebleNotes, 'treble');
       padNotes(bassNotes, 'bass');
 
-      // 🎼 VOICES
+      // VOICES
       const trebleVoice = new Voice({
         num_beats: 4,
         beat_value: 4,
@@ -146,14 +146,14 @@ export function SheetMusicRenderer({ midiData, currentNoteIndex = -1 }: SheetMus
       trebleVoice.addTickables(trebleNotes);
       bassVoice.addTickables(bassNotes);
 
-      // 🎯 FORMAT + DRAW
+      // FORMAT + DRAW (removed padding option)
       new Formatter()
         .joinVoices([trebleVoice])
-        .formatToStave([trebleVoice], trebleStave, { padding: 20 });
+        .formatToStave([trebleVoice], trebleStave);
 
       new Formatter()
         .joinVoices([bassVoice])
-        .formatToStave([bassVoice], bassStave, { padding: 20 });
+        .formatToStave([bassVoice], bassStave);
 
       trebleVoice.draw(context, trebleStave);
       bassVoice.draw(context, bassStave);
