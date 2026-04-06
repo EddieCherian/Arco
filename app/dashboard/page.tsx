@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { AudioRecorder } from '@/components/AudioRecorder';
 import { SheetMusicRenderer } from '@/components/SheetMusicRenderer';
@@ -16,11 +16,12 @@ import { BandArranger } from '@/components/BandArranger';
 import { ChordChart } from '@/components/ChordChart';
 import { MidiData } from '@/lib/types';
 import { MidiConverter } from '@/lib/midiConverter';
-import { Save, Share2 } from 'lucide-react';
+import { Save, Share2, Loader2 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
 import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { Toaster, toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 const defaultMidiData: MidiData = {
   notes: [],
@@ -36,7 +37,26 @@ export default function DashboardPage() {
   const [midiData, setMidiData] = useState<MidiData>(defaultMidiData);
   const [pieceName, setPieceName] = useState('Untitled Piece');
   const [isSaving, setIsSaving] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#05080F] flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-[#C9A84C]" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
   
   const handleTranscriptionComplete = async (newMidiData: MidiData) => {
     setMidiData(newMidiData);
@@ -51,25 +71,30 @@ export default function DashboardPage() {
   
   const handleClefChange = (clef: string) => {
     setMidiData({ ...midiData, clef: clef as any });
+    toast.info(`Changed to ${clef} clef`);
   };
   
   const handleKeyChange = (key: string) => {
     const transposed = MidiConverter.changeKey(midiData, key);
     setMidiData(transposed);
+    toast.success(`Transposed to ${key}`);
   };
   
   const handleOctaveShift = (octaves: number) => {
     const shifted = MidiConverter.shiftOctave(midiData, octaves);
-    setMidiData(shifted);
+    setMidiData({ ...shifted, octaveShift: octaves });
+    toast.info(`Octave shift: ${octaves > 0 ? `+${octaves}` : octaves}`);
   };
   
   const handleTimeSignatureChange = (timeSig: string) => {
     const [beats, beatValue] = timeSig.split('/').map(Number);
     setMidiData({ ...midiData, timeSignature: [beats, beatValue] });
+    toast.info(`Time signature changed to ${timeSig}`);
   };
   
   const handleTempoChange = (tempo: number) => {
     setMidiData({ ...midiData, tempo });
+    toast.info(`Tempo set to ${tempo} BPM`);
   };
   
   const saveToLibrary = async () => {
@@ -97,6 +122,7 @@ export default function DashboardPage() {
       const docRef = await addDoc(collection(db, 'pieces'), pieceData);
       toast.success('Saved to library!');
     } catch (error) {
+      console.error('Save error:', error);
       toast.error('Failed to save');
     } finally {
       setIsSaving(false);
@@ -129,6 +155,7 @@ export default function DashboardPage() {
       await navigator.clipboard.writeText(shareUrl);
       toast.success('Share link copied to clipboard!');
     } catch (error) {
+      console.error('Share error:', error);
       toast.error('Failed to create share link');
     } finally {
       setIsSaving(false);
@@ -137,6 +164,7 @@ export default function DashboardPage() {
   
   return (
     <div className="min-h-screen bg-[#05080F]">
+      <Toaster position="top-right" richColors />
       <Sidebar />
       
       <main className="ml-64 p-8">
@@ -147,15 +175,15 @@ export default function DashboardPage() {
                 type="text"
                 value={pieceName}
                 onChange={(e) => setPieceName(e.target.value)}
-                className="text-3xl font-bold bg-transparent border-b-2 border-[#C9A84C]/30 focus:border-[#C9A84C] outline-none px-2"
+                className="text-3xl font-bold bg-transparent border-b-2 border-[#C9A84C]/30 focus:border-[#C9A84C] outline-none px-2 text-[#EEF2FF]"
               />
             </div>
             
             <div className="flex gap-3">
               <button
                 onClick={saveToLibrary}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#05080F] rounded-lg hover:bg-[#b8943a] transition-colors"
+                disabled={isSaving || midiData.notes.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#05080F] rounded-lg hover:bg-[#b8943a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save size={18} />
                 Save
@@ -163,8 +191,8 @@ export default function DashboardPage() {
               
               <button
                 onClick={createShareLink}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-[#1a2030] text-[#EEF2FF] rounded-lg hover:bg-[#202838] transition-colors"
+                disabled={isSaving || midiData.notes.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-[#1a2030] text-[#EEF2FF] rounded-lg hover:bg-[#202838] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Share2 size={18} />
                 Share
@@ -208,7 +236,7 @@ export default function DashboardPage() {
                   
                   <div className="bg-[#0a0f1a] rounded-lg p-6 border border-[#C9A84C]/20">
                     <label className="block text-sm font-medium mb-2 text-[#EEF2FF]/80">
-                      Octave Shift: {midiData.octaveShift}
+                      Octave Shift: {midiData.octaveShift > 0 ? `+${midiData.octaveShift}` : midiData.octaveShift}
                     </label>
                     <input
                       type="range"
@@ -219,6 +247,13 @@ export default function DashboardPage() {
                       onChange={(e) => handleOctaveShift(parseInt(e.target.value))}
                       className="w-full"
                     />
+                    <div className="flex justify-between text-xs text-[#EEF2FF]/40 mt-1">
+                      <span>-2</span>
+                      <span>-1</span>
+                      <span>0</span>
+                      <span>+1</span>
+                      <span>+2</span>
+                    </div>
                   </div>
                   
                   <ChordChart midiData={midiData} />
