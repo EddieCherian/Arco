@@ -78,58 +78,71 @@ export function BandArranger({ midiData }: BandArrangerProps) {
     }
   };
 
+  const css = `
+  .band { background: #07090E; border: 1px solid #C9A84C18; position: relative; padding: 28px; }
+  .band::before { content: ''; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-top: 1px solid #C9A84C; border-left: 1px solid #C9A84C; opacity: 0.6; }
+  .band::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-bottom: 1px solid #C9A84C; border-right: 1px solid #C9A84C; opacity: 0.6; }
+
+  .band-title { display: flex; align-items: center; gap: 8px; color: #C9A84C; margin-bottom: 18px; }
+
+  .band-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; }
+
+  .band-item { display: flex; align-items: center; gap: 8px; padding: 10px; background: #05080F; border: 1px solid #C9A84C30; cursor: pointer; }
+
+  .band-item input { accent-color: #C9A84C; }
+
+  .band-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: #C9A84C; color: #05080F; border: none; cursor: pointer; }
+
+  .band-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .band-footer { font-size: 12px; color: #EEF2FF66; text-align: center; margin-top: 12px; }
+  `;
+
   return (
-    <div className="bg-[#0a0f1a] rounded-lg p-6 border border-[#C9A84C]/20">
-      <div className="flex items-center gap-2 mb-4">
-        <Users size={20} className="text-[#C9A84C]" />
-        <h3 className="text-lg font-semibold text-[#C9A84C]">Band Arranger</h3>
-      </div>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-2 text-[#EEF2FF]/80">
-            Select Instruments (max 8)
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {bandInstruments.map((instrument) => (
-              <label
-                key={instrument}
-                className="flex items-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg cursor-pointer hover:border-[#C9A84C] transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedInstruments.includes(instrument)}
-                  onChange={() => toggleInstrument(instrument)}
-                  className="w-4 h-4 rounded border-[#C9A84C]/30 text-[#C9A84C] focus:ring-[#C9A84C]"
-                />
-                <span className="text-sm capitalize">{instrument}</span>
-              </label>
-            ))}
-          </div>
+    <>
+      <style>{css}</style>
+
+      <div className="band">
+        <div className="band-title">
+          <Users size={18} />
+          <span>Band Arranger</span>
         </div>
-        
+
+        <div className="band-grid">
+          {bandInstruments.map((instrument) => (
+            <label key={instrument} className="band-item">
+              <input
+                type="checkbox"
+                checked={selectedInstruments.includes(instrument)}
+                onChange={() => toggleInstrument(instrument)}
+              />
+              <span>{instrument}</span>
+            </label>
+          ))}
+        </div>
+
         <button
           onClick={generateParts}
           disabled={isGenerating || selectedInstruments.length === 0}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#05080F] rounded-lg hover:bg-[#b8943a] transition-colors disabled:opacity-50"
+          className="band-btn"
         >
           {isGenerating ? (
             <>
-              <Loader2 size={18} className="animate-spin" />
-              Generating Parts...
+              <Loader2 size={16} className="spin" />
+              Generating...
             </>
           ) : (
             <>
-              <Download size={18} />
-              Generate Band Parts (ZIP)
+              <Download size={16} />
+              Generate Band Parts
             </>
           )}
         </button>
-        
-        <p className="text-xs text-[#EEF2FF]/40 text-center">
-          Each instrument part is optimized for its range and capabilities
-        </p>
+
+        <div className="band-footer">
+          Each instrument is adapted to its playable range
+        </div>
       </div>
-    </div>
+    </>
   );
 }
