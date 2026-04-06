@@ -5,45 +5,41 @@ interface KeyTransposerProps {
   onChange: (key: string) => void;
 }
 
-const majorKeys = [
-  'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'
-];
+const majorKeys = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+const minorKeys = ['Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm', 'Cm', 'Gm', 'Dm'];
 
-const minorKeys = [
-  'Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm', 'Cm', 'Gm', 'Dm'
-];
+const css = `
+  .key-section-label { font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: #C9A84C; opacity: 0.5; margin-bottom: 8px; }
+  .key-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 16px; }
+  .key-btn { padding: 8px 4px; background: transparent; border: 1px solid #C9A84C15; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #EEF2FF33; transition: border-color 0.2s, color 0.2s, background 0.2s; text-align: center; }
+  .key-btn:hover { border-color: #C9A84C40; color: #EEF2FF88; background: #C9A84C06; }
+  .key-btn.active { border-color: #C9A84C; color: #C9A84C; background: #C9A84C0A; }
+  .key-hint { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #EEF2FF22; }
+`;
 
 export function KeyTransposer({ value, onChange }: KeyTransposerProps) {
   return (
-    <div className="bg-[#0a0f1a] rounded-lg p-4 border border-[#C9A84C]/20">
-      <label className="block text-sm font-medium mb-2 text-[#EEF2FF]/80">
-        Key Signature
-      </label>
-      
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] focus:border-[#C9A84C] focus:outline-none transition-colors"
-      >
-        <optgroup label="Major Keys">
-          {majorKeys.map((key) => (
-            <option key={key} value={key}>
-              {key} Major
-            </option>
+    <>
+      <style>{css}</style>
+      <div>
+        <div className="key-section-label">Major</div>
+        <div className="key-grid">
+          {majorKeys.map(key => (
+            <button key={key} className={`key-btn ${value === key ? 'active' : ''}`} onClick={() => onChange(key)}>
+              {key}
+            </button>
           ))}
-        </optgroup>
-        <optgroup label="Minor Keys">
-          {minorKeys.map((key) => (
-            <option key={key} value={key}>
-              {key} Minor
-            </option>
+        </div>
+        <div className="key-section-label">Minor</div>
+        <div className="key-grid">
+          {minorKeys.map(key => (
+            <button key={key} className={`key-btn ${value === key ? 'active' : ''}`} onClick={() => onChange(key)}>
+              {key}
+            </button>
           ))}
-        </optgroup>
-      </select>
-      
-      <p className="text-xs text-[#EEF2FF]/40 mt-2">
-        Transposes all notes to selected key
-      </p>
-    </div>
+        </div>
+        <p className="key-hint">Transposes all notes</p>
+      </div>
+    </>
   );
 }
