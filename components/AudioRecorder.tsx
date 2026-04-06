@@ -46,7 +46,11 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (
+      mediaRecorderRef.current &&
+      isRecording &&
+      mediaRecorderRef.current.state !== 'inactive'
+    ) {
       try {
         mediaRecorderRef.current.stop();
         setIsRecording(false);
