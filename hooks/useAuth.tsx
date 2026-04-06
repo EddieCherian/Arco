@@ -36,37 +36,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+      const result = await signInWithPopup(auth, googleProvider);
+      setUser(result.user);
+    } catch (error: any) {
       console.error('Google sign in failed:', error);
-      throw error;
+      throw new Error(error.message || 'Google sign in failed');
     }
   };
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      setUser(result.user);
+    } catch (error: any) {
       console.error('Email sign in failed:', error);
-      throw error;
+      throw new Error(error.message || 'Email sign in failed');
     }
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (error) {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      setUser(result.user);
+    } catch (error: any) {
       console.error('Sign up failed:', error);
-      throw error;
+      throw new Error(error.message || 'Sign up failed');
     }
   };
 
   const logout = async () => {
     try {
       await signOut(auth);
-    } catch (error) {
+      setUser(null);
+    } catch (error: any) {
       console.error('Logout failed:', error);
-      throw error;
+      throw new Error(error.message || 'Logout failed');
     }
   };
 
