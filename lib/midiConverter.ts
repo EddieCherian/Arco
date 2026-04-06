@@ -1,5 +1,4 @@
-import * as mm from '@magenta/music';
-import { MidiData } from './types';
+import { MidiData, Note } from './types';
 
 export class MidiConverter {
   private static instrumentRanges: Record<string, [number, number]> = {
@@ -19,28 +18,34 @@ export class MidiConverter {
     bass_voice: [50, 70]
   };
   
-  static async convertInstrument(
-    midiData: MidiData,
-    targetInstrument: string
-  ): Promise<MidiData> {
-    const sourceInstrument = midiData.instrument;
+  static async convertInstrument(midiData: MidiData, targetInstrument: string): Promise<MidiData> {
     const targetRange = this.instrumentRanges[targetInstrument] || [21, 108];
     
     let convertedNotes = midiData.notes.map(note => {
       let newPitch = note.pitch;
       
+      // For voice, take only highest pitches
       if (targetInstrument.includes('voice') && midiData.notes.length > 1) {
         const highestPitch = Math.max(...midiData.notes.map(n => n.pitch));
         newPitch = highestPitch;
       }
       
+      // Clamp to instrument range
       newPitch = Math.max(targetRange[0], Math.min(targetRange[1], newPitch));
       
       return { ...note, pitch: newPitch };
     });
     
-    if (midiData.notes.length > 1 && targetInstrument.includes('voice')) {
-      convertedNotes = [convertedNotes[0]];
+    // For voice, keep only one note at a time
+    if (targetInstrument.includes('voice') && convertedNotes.length > 1) {
+      const uniqueTimes = new Map();
+      convertedNotes.forEach(note => {
+        const timeKey = Math.round(note.startTime * 10);
+        if (!uniqueTimes.has(timeKey) || uniqueTimes.get(timeKey).pitch < note.pitch) {
+          uniqueTimes.set(timeKey, note);
+        }
+      });
+      convertedNotes = Array.from(uniqueTimes.values());
     }
     
     return {
