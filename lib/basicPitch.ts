@@ -1,27 +1,17 @@
-import {
-  BasicPitch,
-  noteFramesToTime,
-  addPitchBendsToNoteEvents,
-  outputToNotesMono
-} from '@spotify/basic-pitch';
+// lib/basicPitch.ts
+import * as basicPitch from '@spotify/basic-pitch';
 
-let modelInstance: BasicPitch | null = null;
+let modelInstance: any = null;
 
-async function getModel(): Promise<BasicPitch> {
+async function getModel(): Promise<any> {
   if (!modelInstance) {
-    modelInstance = new BasicPitch(`${window.location.origin}/model/model.json`);
+    // Use the correct BasicPitch API
+    const modelURL = `${window.location.origin}/model/model.json`;
+    modelInstance = await basicPitch.BasicPitch.load(modelURL);
   }
   return modelInstance;
 }
 
-export interface BasicPitchNote {
-  pitchMidi: number;
-  startTimeSeconds: number;
-  endTimeSeconds: number;
-  amplitude?: number;
-}
-
-// 🔥 Convert to mono (IMPORTANT)
 function toMono(audioBuffer: AudioBuffer): AudioBuffer {
   if (audioBuffer.numberOfChannels === 1) return audioBuffer;
 
@@ -41,41 +31,30 @@ function toMono(audioBuffer: AudioBuffer): AudioBuffer {
   return newBuffer;
 }
 
+export interface BasicPitchNote {
+  pitchMidi: number;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  amplitude?: number;
+}
+
 export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<BasicPitchNote[]> {
-  const frames: number[][] = [];
-  const onsets: number[][] = [];
-  const contours: number[][] = [];
-
-  const model = await getModel();
-
-  // 🔥 FORCE MONO INPUT
   const monoBuffer = toMono(audioBuffer);
-
-  await model.evaluateModel(
-    monoBuffer,
-    (f: number[][], o: number[][], c: number[][]) => {
-      frames.push(...f);
-      onsets.push(...o);
-      contours.push(...c);
-    },
-    () => {}
-  );
-
-  if (frames.length === 0) {
-    throw new Error('No audio data detected.');
-  }
-
-  // 🔥 MUCH STRICTER + MONO MODE
-  const rawNotes = noteFramesToTime(
-    addPitchBendsToNoteEvents(
-      contours,
-      outputToNotesMono(frames, onsets, 0.95, 0.95)
-    )
-  );
-
-  if (!rawNotes || rawNotes.length === 0) {
-    throw new Error('No notes detected.');
-  }
-
-  return rawNotes;
+  
+  // Get audio data as Float32Array
+  const audioData = monoBuffer.getChannelData(0);
+  const sampleRate = monoBuffer.sampleRate;
+  
+  // Use BasicPitch's predict function
+  const predictions = await basicPitch.predict(audioData, sampleRate);
+  
+  // Convert predictions to notes
+  const notes: BasicPitchNote[] = predictions.notes.map((note: any) => ({
+    pitchMidi: note.pitch,
+    startTimeSeconds: note.startTimeSeconds,
+    endTimeSeconds: note.endTimeSeconds,
+    amplitude: note.amplitude
+  }));
+  
+  return notes;
 }
