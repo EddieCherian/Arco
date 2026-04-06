@@ -41,7 +41,7 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
       mediaRecorder.start(100);
       setIsRecording(true);
     } catch {
-      setError('Could not access microphone. Please check permissions.');
+      setError('Mic access denied. Enable permissions.');
     }
   };
 
@@ -65,7 +65,7 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
       onTranscriptionComplete(midiData);
     } catch {
-      setError('Failed to transcribe audio. Please try again.');
+      setError('Transcription failed');
     } finally {
       setIsProcessing(false);
     }
@@ -83,60 +83,57 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
       onTranscriptionComplete(midiData);
     } catch {
-      setError('Failed to process audio file. Please try a different file.');
+      setError('File failed to process');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const css = `@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Crimson+Pro:ital,wght@0,300;1,300&display=swap');
-  .recorder { background: #07090E; border: 1px solid #C9A84C18; position: relative; padding: 28px; }
-  .recorder::before { content: ''; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-top: 1px solid #C9A84C; border-left: 1px solid #C9A84C; opacity: 0.6; }
-  .recorder::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-bottom: 1px solid #C9A84C; border-right: 1px solid #C9A84C; opacity: 0.6; }
-  .recorder-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .rec-btn-record { display: flex; align-items: center; gap: 8px; padding: 12px 24px; background: #C9A84C; color: #05080F; border: none; cursor: pointer; }
-  .rec-btn-stop { display: flex; align-items: center; gap: 8px; padding: 12px 24px; }
-  .rec-btn-upload { display: flex; align-items: center; gap: 8px; padding: 12px 24px; }
-  .rec-error { margin-top: 16px; }
-  .rec-processing { margin-top: 16px; }
-  .rec-waveform { margin-top: 20px; }`;
-
   return (
-    <>
-      <style>{css}</style>
-
-      <div className="recorder">
-        <div className="recorder-row">
-          {!isRecording ? (
-            <button className="rec-btn-record" onClick={startRecording}>
-              <Mic size={13} /> Record
-            </button>
-          ) : (
-            <button className="rec-btn-stop" onClick={stopRecording}>
-              <Square size={10} /><span className="stop-label">Stop</span>
-            </button>
-          )}
-
-          <label className="rec-btn-upload">
-            <Upload size={13} /> Upload File
-            <input type="file" accept="audio/*" onChange={handleFileUpload} style={{ display: 'none' }} />
-          </label>
-        </div>
-
-        {error && <div className="rec-error">{error}</div>}
-
-        {isProcessing && (
-          <div className="rec-processing">
-            <Loader2 size={13} className="spin" /> Transcribing audio...
-          </div>
+    <div className="w-full max-w-md mx-auto bg-[#0f172a] border border-white/10 rounded-2xl p-5 shadow-lg">
+      
+      <div className="flex gap-3 mb-4">
+        {!isRecording ? (
+          <button
+            onClick={startRecording}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 transition font-medium"
+          >
+            <Mic size={18} /> Record
+          </button>
+        ) : (
+          <button
+            onClick={stopRecording}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500 hover:bg-red-600 transition font-medium"
+          >
+            <Square size={18} /> Stop
+          </button>
         )}
 
-        {audioBlob && !isProcessing && (
-          <div className="rec-waveform">
-            <WaveformVisualizer audioBlob={audioBlob} />
-          </div>
-        )}
+        <label className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition">
+          <Upload size={18} />
+          Upload
+          <input type="file" accept="audio/*" onChange={handleFileUpload} hidden />
+        </label>
       </div>
-    </>
+
+      {error && (
+        <div className="text-red-400 text-sm mb-3">
+          {error}
+        </div>
+      )}
+
+      {isProcessing && (
+        <div className="flex items-center gap-2 text-sm text-white/70 mb-3">
+          <Loader2 className="animate-spin" size={16} />
+          Processing audio...
+        </div>
+      )}
+
+      {audioBlob && !isProcessing && (
+        <div className="mt-4 bg-black/30 rounded-xl p-3">
+          <WaveformVisualizer audioBlob={audioBlob} />
+        </div>
+      )}
+    </div>
   );
 }
