@@ -46,11 +46,7 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
   };
 
   const stopRecording = () => {
-    if (
-      mediaRecorderRef.current &&
-      isRecording &&
-      mediaRecorderRef.current.state !== 'inactive'
-    ) {
+    if (mediaRecorderRef.current && isRecording) {
       try {
         mediaRecorderRef.current.stop();
         setIsRecording(false);
@@ -94,7 +90,16 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
   };
 
   const css = `@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Crimson+Pro:ital,wght@0,300;1,300&display=swap');
-  .recorder { background: #07090E; border: 1px solid #C9A84C18; position: relative; padding: 28px; }`;
+  .recorder { background: #07090E; border: 1px solid #C9A84C18; position: relative; padding: 28px; }
+  .recorder::before { content: ''; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-top: 1px solid #C9A84C; border-left: 1px solid #C9A84C; opacity: 0.6; }
+  .recorder::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-bottom: 1px solid #C9A84C; border-right: 1px solid #C9A84C; opacity: 0.6; }
+  .recorder-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rec-btn-record { display: flex; align-items: center; gap: 8px; padding: 12px 24px; background: #C9A84C; color: #05080F; border: none; cursor: pointer; }
+  .rec-btn-stop { display: flex; align-items: center; gap: 8px; padding: 12px 24px; }
+  .rec-btn-upload { display: flex; align-items: center; gap: 8px; padding: 12px 24px; }
+  .rec-error { margin-top: 16px; }
+  .rec-processing { margin-top: 16px; }
+  .rec-waveform { margin-top: 20px; }`;
 
   return (
     <>
