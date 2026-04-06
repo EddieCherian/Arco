@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Repeat, Volume2 } from 'lucide-react';
+import { Play, Pause, Square, Repeat, Volume2, Gauge } from 'lucide-react';
 import { MidiData } from '@/lib/types';
 
 interface PlaybackControlsProps {
@@ -11,183 +11,201 @@ interface PlaybackControlsProps {
   onCurrentNoteChange?: (noteIndex: number) => void;
 }
 
-export function PlaybackControls({ 
-  midiData, 
-  onPlaybackStart, 
+export function PlaybackControls({
+  midiData,
+  onPlaybackStart,
   onPlaybackStop,
-  onCurrentNoteChange 
+  onCurrentNoteChange,
 }: PlaybackControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [volume, setVolume] = useState(0.5);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const currentNoteIndexRef = useRef(0);
-  const isPlayingRef = useRef(false);
-  const scheduledTimesRef = useRef<number[]>([]);
-  
+  const [volume, setVolume] = useState(0.7);
+  const [progress, setProgress] = useState(0);
+  const synthRef = useRef<any>(null);
+  const partRef = useRef<any>(null);
+  const toneRef = useRef<any>(null);
+  const progressIntervalRef = useRef<any>(null);
+
   useEffect(() => {
-    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
     return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      stopPlayback();
     };
   }, []);
-  
-  const stopPlayback = () => {
-    if (audioContextRef.current) {
-      // Cancel all scheduled sounds
-      scheduledTimesRef.current.forEach(time => {
-        // Can't easily cancel scheduled events, so we just stop the context
-      });
-      audioContextRef.current.close();
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+  const midiToNote = (midi: number): string => {
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const octave = Math.floor(midi / 12) - 1;
+    return `${notes[midi % 12]}${Math.max(0, octave)}`;
+  };
+
+  const stopPlayback = async () => {
+    if (partRef.current) {
+      partRef.current.stop();
+      partRef.current.dispose();
+      partRef.current = null;
     }
+    if (synthRef.current) {
+      synthRef.current.releaseAll?.();
+    }
+    if (toneRef.current) {
+      toneRef.current.Transport.stop();
+      toneRef.current.Transport.cancel();
+    }
+    clearInterval(progressIntervalRef.current);
     setIsPlaying(false);
-    isPlayingRef.current = false;
-    currentNoteIndexRef.current = 0;
-    if (onPlaybackStop) onPlaybackStop();
+    setProgress(0);
+    onCurrentNoteChange?.(-1);
+    onPlaybackStop?.();
   };
-  
-  const playNote = (pitch: number, startTime: number, duration: number, velocity: number) => {
-    if (!audioContextRef.current || !isPlayingRef.current) return;
-    
-    const now = audioContextRef.current.currentTime;
-    const scheduleTime = Math.max(now, startTime / speed);
-    
-    const oscillator = audioContextRef.current.createOscillator();
-    const gainNode = audioContextRef.current.createGain();
-    
-    const frequency = 440 * Math.pow(2, (pitch - 69) / 12);
-    oscillator.frequency.value = frequency;
-    oscillator.type = 'sine';
-    
-    gainNode.gain.value = velocity / 127 * volume;
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContextRef.current.destination);
-    
-    oscillator.start(scheduleTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, scheduleTime + duration);
-    oscillator.stop(scheduleTime + duration);
-  };
-  
-  const scheduleNotes = () => {
-    if (!audioContextRef.current) return;
-    
-    let currentTime = audioContextRef.current.currentTime;
-    
-    for (let i = 0; i < midiData.notes.length; i++) {
-      const note = midiData.notes[i];
-      const duration = (note.endTime - note.startTime) / speed;
-      
-      setTimeout(() => {
-        if (isPlayingRef.current) {
-          playNote(note.pitch, performance.now() / 1000, duration, note.velocity);
-          if (onCurrentNoteChange) {
-            onCurrentNoteChange(i);
-          }
-        }
-      }, currentTime * 1000);
-      
-      currentTime += duration;
-    }
-    
-    // Schedule loop
-    if (isLooping) {
-      setTimeout(() => {
-        if (isPlayingRef.current && isLooping) {
-          scheduleNotes();
-        }
-      }, currentTime * 1000);
-    }
-  };
-  
+
   const startPlayback = async () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (midiData.notes.length === 0) return;
+
+    try {
+      const Tone = await import('tone');
+      toneRef.current = Tone;
+
+      await Tone.start();
+
+      // Clean up previous
+      if (partRef.current) { partRef.current.stop(); partRef.current.dispose(); }
+      if (synthRef.current) { synthRef.current.dispose(); }
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
+
+      // Create synth
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.8 },
+        volume: Tone.gainToDb(volume),
+      }).toDestination();
+      synthRef.current = synth;
+
+      const totalDuration = Math.max(...midiData.notes.map(n => n.endTime));
+
+      // Build part events
+      const events = midiData.notes.map((note, idx) => ({
+        time: note.startTime / speed,
+        note: midiToNote(note.pitch),
+        duration: Math.max(0.05, (note.endTime - note.startTime) / speed),
+        velocity: note.velocity / 127,
+        idx,
+      }));
+
+      const part = new Tone.Part((time: number, event: any) => {
+        synth.triggerAttackRelease(event.note, event.duration, time, event.velocity);
+        Tone.getDraw().schedule(() => {
+          onCurrentNoteChange?.(event.idx);
+        }, time);
+      }, events);
+
+      part.loop = isLooping;
+      if (isLooping) part.loopEnd = totalDuration / speed;
+      partRef.current = part;
+
+      Tone.Transport.bpm.value = midiData.tempo * speed;
+      part.start(0);
+      Tone.Transport.start();
+
+      setIsPlaying(true);
+      onPlaybackStart?.();
+
+      // Progress tracking
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = setInterval(() => {
+        const pos = Tone.Transport.seconds;
+        const pct = Math.min((pos / (totalDuration / speed)) * 100, 100);
+        setProgress(pct);
+        if (pct >= 100 && !isLooping) {
+          stopPlayback();
+        }
+      }, 100);
+
+    } catch (err) {
+      console.error('Playback error:', err);
     }
-    
-    await audioContextRef.current.resume();
-    isPlayingRef.current = true;
-    currentNoteIndexRef.current = 0;
-    
-    scheduleNotes();
-    setIsPlaying(true);
-    if (onPlaybackStart) onPlaybackStart();
   };
-  
-  const pausePlayback = () => {
-    isPlayingRef.current = false;
+
+  const pausePlayback = async () => {
+    if (!toneRef.current) return;
+    toneRef.current.Transport.pause();
+    clearInterval(progressIntervalRef.current);
     setIsPlaying(false);
   };
-  
+
+  const resumePlayback = async () => {
+    if (!toneRef.current) return;
+    toneRef.current.Transport.start();
+    setIsPlaying(true);
+  };
+
+  const css = `
+    .playback { display: flex; flex-direction: column; gap: 16px; }
+    .playback-btns { display: flex; align-items: center; gap: 8px; }
+    .pb-btn { width: 40px; height: 40px; border: 1px solid #C9A84C25; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #EEF2FF55; transition: border-color 0.2s, color 0.2s, background 0.2s; flex-shrink: 0; }
+    .pb-btn:hover:not(:disabled) { border-color: #C9A84C66; color: #EEF2FF99; background: #C9A84C08; }
+    .pb-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .pb-btn.primary { background: #C9A84C; color: #05080F; border-color: #C9A84C; }
+    .pb-btn.primary:hover:not(:disabled) { background: #E8C96A; }
+    .pb-btn.active { border-color: #C9A84C; color: #C9A84C; }
+    .pb-divider { width: 1px; height: 24px; background: #C9A84C15; margin: 0 4px; }
+    .pb-control { display: flex; align-items: center; gap: 10px; }
+    .pb-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #EEF2FF33; white-space: nowrap; }
+    .pb-value { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #C9A84C; min-width: 32px; }
+    .pb-slider { -webkit-appearance: none; height: 1px; background: #C9A84C18; outline: none; cursor: pointer; width: 80px; }
+    .pb-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #C9A84C; cursor: pointer; }
+    .pb-progress-wrap { height: 2px; background: #C9A84C12; position: relative; }
+    .pb-progress-bar { height: 100%; background: #C9A84C; transition: width 0.1s linear; }
+    .pb-progress-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #C9A84C; border-radius: 50%; transition: left 0.1s linear; }
+  `;
+
   return (
-    <div className="bg-[#0a0f1a] rounded-lg p-4 border border-[#C9A84C]/20">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={startPlayback}
-          disabled={isPlaying}
-          className="p-2 rounded-full bg-[#C9A84C] text-[#05080F] hover:bg-[#b8943a] transition-colors disabled:opacity-50"
-        >
-          <Play size={20} />
-        </button>
-        
-        <button
-          onClick={pausePlayback}
-          disabled={!isPlaying}
-          className="p-2 rounded-full bg-[#1a2030] text-[#EEF2FF] hover:bg-[#202838] transition-colors disabled:opacity-50"
-        >
-          <Pause size={20} />
-        </button>
-        
-        <button
-          onClick={stopPlayback}
-          className="p-2 rounded-full bg-[#1a2030] text-[#EEF2FF] hover:bg-[#202838] transition-colors"
-        >
-          <Square size={20} />
-        </button>
-        
-        <button
-          onClick={() => setIsLooping(!isLooping)}
-          className={`p-2 rounded-full transition-colors ${
-            isLooping ? 'bg-[#C9A84C] text-[#05080F]' : 'bg-[#1a2030] text-[#EEF2FF]'
-          }`}
-        >
-          <Repeat size={20} />
-        </button>
-        
-        <div className="flex items-center gap-2 ml-4">
-          <Volume2 size={16} className="text-[#EEF2FF]/60" />
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-24"
-          />
+    <>
+      <style>{css}</style>
+      <div className="playback">
+        <div className="pb-progress-wrap">
+          <div className="pb-progress-bar" style={{ width: `${progress}%` }} />
+          <div className="pb-progress-dot" style={{ left: `${progress}%` }} />
         </div>
-        
-        <div className="flex items-center gap-2 ml-4">
-          <span className="text-sm text-[#EEF2FF]/60">Speed:</span>
-          <input
-            type="range"
-            min="0.5"
-            max="1.5"
-            step="0.01"
-            value={speed}
-            onChange={(e) => {
-              setSpeed(parseFloat(e.target.value));
-            }}
-            className="w-24"
-          />
-          <span className="text-sm text-[#C9A84C]">{Math.round(speed * 100)}%</span>
+
+        <div className="playback-btns">
+          {!isPlaying ? (
+            <button className="pb-btn primary" onClick={startPlayback} disabled={midiData.notes.length === 0}>
+              <Play size={16} />
+            </button>
+          ) : (
+            <button className="pb-btn primary" onClick={pausePlayback}>
+              <Pause size={16} />
+            </button>
+          )}
+
+          <button className="pb-btn" onClick={stopPlayback}>
+            <Square size={14} />
+          </button>
+
+          <button className={`pb-btn ${isLooping ? 'active' : ''}`} onClick={() => setIsLooping(!isLooping)}>
+            <Repeat size={14} />
+          </button>
+
+          <div className="pb-divider" />
+
+          <div className="pb-control">
+            <Volume2 size={12} color="#EEF2FF33" />
+            <input className="pb-slider" type="range" min="0" max="1" step="0.01" value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))} />
+          </div>
+
+          <div className="pb-divider" />
+
+          <div className="pb-control">
+            <Gauge size={12} color="#EEF2FF33" />
+            <input className="pb-slider" type="range" min="0.5" max="2" step="0.05" value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))} />
+            <span className="pb-value">{Math.round(speed * 100)}%</span>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
