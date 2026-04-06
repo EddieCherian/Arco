@@ -13,11 +13,13 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   
   const startRecording = async () => {
+    setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -41,27 +43,35 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
+      setError('Could not access microphone. Please check permissions.');
     }
   };
   
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+      try {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+        setError('Error stopping recording');
       }
     }
   };
   
   const processAudio = async (blob: Blob) => {
     setIsProcessing(true);
+    setError(null);
     try {
       const audioBuffer = await AudioProcessor.blobToAudioBuffer(blob);
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
       onTranscriptionComplete(midiData);
     } catch (error) {
       console.error('Transcription failed:', error);
+      setError('Failed to transcribe audio. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -72,12 +82,14 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
     if (!file) return;
     
     setIsProcessing(true);
+    setError(null);
     try {
       const audioBuffer = await AudioProcessor.blobToAudioBuffer(file);
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
       onTranscriptionComplete(midiData);
     } catch (error) {
       console.error('File processing failed:', error);
+      setError('Failed to process audio file. Please try a different file.');
     } finally {
       setIsProcessing(false);
     }
@@ -103,13 +115,13 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
               className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
             >
               <Square size={18} />
-              Stop
+              Stop Recording
             </button>
           )}
           
           <label className="flex items-center gap-2 px-4 py-2 bg-[#1a2030] text-[#EEF2FF] rounded-lg cursor-pointer hover:bg-[#202838] transition-colors">
             <Upload size={18} />
-            Upload
+            Upload File
             <input
               type="file"
               accept="audio/*"
@@ -119,7 +131,13 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
           </label>
         </div>
         
-        {audioBlob && <WaveformVisualizer audioBlob={audioBlob} />}
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+        
+        {audioBlob && !isProcessing && <WaveformVisualizer audioBlob={audioBlob} />}
         
         {isProcessing && (
           <div className="flex items-center gap-2 text-[#C9A84C]">
