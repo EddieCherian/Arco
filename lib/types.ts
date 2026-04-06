@@ -1,4 +1,4 @@
-// 🎵 Single note structure
+// 🎵 Single note structure with clef support
 export interface Note {
   pitch: number;
   startTime: number;
@@ -9,12 +9,12 @@ export interface Note {
 
 // 🎼 Main MIDI data - Uses single notes array (treble + AI bass combined)
 export interface MidiData {
-  notes: Note[];  // All notes (melody + AI generated bass)
+  notes: Note[];  // All notes (melody + AI generated bass) - each note has clef property
   
   tempo: number;
   timeSignature: [number, number];
   key: string;
-  clef: 'treble' | 'bass' | 'alto' | 'tenor';
+  clef: 'treble' | 'bass' | 'alto' | 'tenor'; // Default display clef
   instrument: string;
   octaveShift: number;
 }
