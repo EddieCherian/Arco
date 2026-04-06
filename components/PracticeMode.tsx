@@ -15,8 +15,8 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentNoteIndex, setCurrentNoteIndex] = useState(-1);
   const [speed, setSpeed] = useState(0.7);
-  const synthRef = useRef<Tone.PolySynth | null>(null);
-  const scheduleIdsRef = useRef<number[]>([]);
+  const synthRef = useRef<any>(null);
+  const scheduleIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (isActive) {
@@ -56,13 +56,13 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
       
       const nextTime = time + (note.endTime - note.startTime);
       const scheduleId = Tone.Transport.schedule((t) => playNote(t, index + 1), nextTime);
-      scheduleIdsRef.current.push(scheduleId);
+      scheduleIdsRef.current.push(scheduleId as string);
     };
     
     const scheduleId = Tone.Transport.schedule((time) => {
       playNote(time, currentIdx);
     }, 0);
-    scheduleIdsRef.current.push(scheduleId);
+    scheduleIdsRef.current.push(scheduleId as string);
     
     Tone.Transport.start();
     setIsPlaying(true);
@@ -71,7 +71,6 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
   const stopPractice = () => {
     Tone.Transport.stop();
     Tone.Transport.cancel();
-    scheduleIdsRef.current.forEach(id => Tone.Transport.clear(id));
     scheduleIdsRef.current = [];
     setIsPlaying(false);
     setCurrentNoteIndex(-1);
