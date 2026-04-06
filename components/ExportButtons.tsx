@@ -64,8 +64,9 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       
       midiData.notes.forEach(note => {
         const noteName = convertMidiToNoteName(note.pitch);
+        // Add type assertion to fix the TypeScript error
         track.addEvent(new MidiWriter.NoteEvent({
-          pitch: [noteName],
+          pitch: [noteName as any],
           duration: '4',
           velocity: note.velocity
         }));
