@@ -16,7 +16,7 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
   const [currentNoteIndex, setCurrentNoteIndex] = useState(-1);
   const [speed, setSpeed] = useState(0.7);
   const synthRef = useRef<any>(null);
-  const scheduleIdsRef = useRef<string[]>([]);
+  const isPlayingRef = useRef(false);
 
   useEffect(() => {
     if (isActive) {
@@ -24,11 +24,42 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
       synthRef.current = synth;
       
       return () => {
-        synth.dispose();
+        if (synthRef.current) {
+          synthRef.current.dispose();
+        }
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
       };
     }
   }, [isActive]);
 
+  const stopPractice = () => {
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    setCurrentNoteIndex(-1);
+  };
+  
+  const schedulePracticeNotes = () => {
+    let currentTime = 0;
+    
+    for (let i = 0; i < midiData.notes.length; i++) {
+      const note = midiData.notes[i];
+      const duration = note.endTime - note.startTime;
+      const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
+      
+      Tone.Transport.schedule((time) => {
+        if (synthRef.current && isPlayingRef.current) {
+          synthRef.current.triggerAttackRelease(frequency, duration, time);
+          setCurrentNoteIndex(i);
+        }
+      }, currentTime);
+      
+      currentTime += duration;
+    }
+  };
+  
   const startPractice = async () => {
     if (!isActive) {
       setIsActive(true);
@@ -39,46 +70,16 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
     Tone.Transport.bpm.value = midiData.tempo * speed;
     Tone.Destination.volume.value = -6;
     
-    let currentIdx = 0;
-    
-    const playNote = (time: number, index: number) => {
-      if (index >= midiData.notes.length) {
-        stopPractice();
-        return;
-      }
-      
-      const note = midiData.notes[index];
-      if (synthRef.current) {
-        const frequency = Tone.Frequency(note.pitch, 'midi').toFrequency();
-        synthRef.current.triggerAttackRelease(frequency, note.endTime - note.startTime, time);
-      }
-      setCurrentNoteIndex(index);
-      
-      const nextTime = time + (note.endTime - note.startTime);
-      const scheduleId = Tone.Transport.schedule((t) => playNote(t, index + 1), nextTime);
-      scheduleIdsRef.current.push(scheduleId as string);
-    };
-    
-    const scheduleId = Tone.Transport.schedule((time) => {
-      playNote(time, currentIdx);
-    }, 0);
-    scheduleIdsRef.current.push(scheduleId as string);
-    
+    isPlayingRef.current = true;
+    schedulePracticeNotes();
     Tone.Transport.start();
     setIsPlaying(true);
-  };
-  
-  const stopPractice = () => {
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
-    scheduleIdsRef.current = [];
-    setIsPlaying(false);
-    setCurrentNoteIndex(-1);
   };
   
   const pausePractice = () => {
     Tone.Transport.pause();
     setIsPlaying(false);
+    isPlayingRef.current = false;
   };
 
   if (!isActive) {
