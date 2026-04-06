@@ -46,7 +46,7 @@ export class AudioProcessor {
     // 🔥 CLEAN BUT KEEP ALL NOTES
     const notes = rawNotes
       .filter((n: any) => (n.endTimeSeconds - n.startTimeSeconds) > 0.08)
-      .filter((n: any) => (n.amplitude ?? 0.8) > 0.15)
+      .filter((n: any) => (n.amplitude ?? 0.8) > 0.3)
       .sort((a: any, b: any) => a.startTimeSeconds - b.startTimeSeconds);
 
     return {
