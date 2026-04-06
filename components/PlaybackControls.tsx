@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import { Play, Pause, Square, Repeat, Volume2 } from 'lucide-react';
 import { MidiData } from '@/lib/types';
@@ -22,11 +22,12 @@ export function PlaybackControls({
   const [isLooping, setIsLooping] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(-6);
-  const synthRef = useState<Tone.PolySynth | null>(null)[0];
+  const synthRef = useRef<Tone.PolySynth | null>(null);
+  const scheduleIdsRef = useRef<number[]>([]);
   
   useEffect(() => {
     const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    synthRef = synth;
+    synthRef.current = synth;
     
     return () => {
       synth.dispose();
@@ -36,36 +37,38 @@ export function PlaybackControls({
   const play = async () => {
     await Tone.start();
     Tone.Transport.bpm.value = midiData.tempo * speed;
+    Tone.Destination.volume.value = volume;
     
     let currentNoteIndex = 0;
+    
     const scheduleNote = (time: number, index: number) => {
       if (index >= midiData.notes.length) {
         if (isLooping) {
           currentNoteIndex = 0;
-          scheduleNextNotes(time + 0.1);
+          scheduleNote(time + 0.1, 0);
         }
         return;
       }
       
       const note = midiData.notes[index];
-      const frequency = Tone.Frequency(note.pitch, 'midi').toFrequency();
-      synthRef.triggerAttackRelease(frequency, note.endTime - note.startTime, time);
+      if (synthRef.current) {
+        const frequency = Tone.Frequency(note.pitch, 'midi').toFrequency();
+        synthRef.current.triggerAttackRelease(frequency, note.endTime - note.startTime, time);
+      }
       
       if (onCurrentNoteChange) {
         onCurrentNoteChange(index);
       }
       
       const nextTime = time + (note.endTime - note.startTime);
-      Tone.Transport.schedule((t) => scheduleNote(t, index + 1), nextTime);
+      const scheduleId = Tone.Transport.schedule((t) => scheduleNote(t, index + 1), nextTime);
+      scheduleIdsRef.current.push(scheduleId);
     };
     
-    const scheduleNextNotes = (startTime: number) => {
-      scheduleNote(startTime, currentNoteIndex);
-    };
-    
-    Tone.Transport.schedule((time) => {
-      scheduleNextNotes(time);
+    const scheduleId = Tone.Transport.schedule((time) => {
+      scheduleNote(time, currentNoteIndex);
     }, 0);
+    scheduleIdsRef.current.push(scheduleId);
     
     Tone.Transport.start();
     setIsPlaying(true);
@@ -75,6 +78,8 @@ export function PlaybackControls({
   const stop = () => {
     Tone.Transport.stop();
     Tone.Transport.cancel();
+    scheduleIdsRef.current.forEach(id => Tone.Transport.clear(id));
+    scheduleIdsRef.current = [];
     setIsPlaying(false);
     if (onPlaybackStop) onPlaybackStop();
   };
