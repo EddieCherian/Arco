@@ -17,7 +17,7 @@
     "firebase": "^10.7.1",
     "@google/generative-ai": "^0.21.0",
     "@magenta/music": "^1.23.1",
-    "@spotify/basic-pitch": "^0.0.6",
+    "@spotify/basic-pitch": "^latest",
     "vexflow": "^4.2.5",
     "midi-writer-js": "^1.7.2",
     "jszip": "^3.10.1",
