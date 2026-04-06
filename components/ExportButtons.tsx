@@ -55,9 +55,8 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       track.setTimeSignature(midiData.timeSignature[0], midiData.timeSignature[1]);
       
       midiData.notes.forEach(note => {
-        const duration = ((note.endTime - note.startTime) * 1000) / 60;
         track.addEvent(new MidiWriter.NoteEvent({
-          pitch: [note.pitch],
+          pitch: [note.pitch.toString()],
           duration: '4',
           velocity: note.velocity
         }));
@@ -78,10 +77,9 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
     }
   };
 
-  const exportMP3 = async () => {
+  const exportAudio = async () => {
     setIsExporting(true);
     try {
-      // Simple MP3 export using Web Audio API recording
       const audioContext = new AudioContext();
       const duration = Math.max(...midiData.notes.map(n => n.endTime), 1);
       const sampleRate = audioContext.sampleRate;
@@ -268,7 +266,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
           MIDI
         </button>
         <button
-          onClick={exportMP3}
+          onClick={exportAudio}
           disabled={isExporting}
           className="flex items-center justify-center gap-2 px-3 py-2 bg-[#05080F] border border-[#C9A84C]/30 rounded-lg text-[#EEF2FF] hover:border-[#C9A84C] transition-colors disabled:opacity-50"
         >
