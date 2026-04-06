@@ -82,7 +82,7 @@ export class AudioProcessor {
     return notes;
   }
   
-  private static estimatePitch(audioSegment: Float32Array, sampleRate: number): number {
+  static estimatePitch(audioSegment: Float32Array, sampleRate: number): number {
     // Autocorrelation method for pitch detection
     const minSamples = Math.floor(sampleRate / 1000); // 1000Hz max
     const maxSamples = Math.floor(sampleRate / 80); // 80Hz min
