@@ -25,6 +25,13 @@ const bandInstruments = [
 
 const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+// Helper function to get valid pitch string
+const getValidPitch = (midiNumber: number): string => {
+  const noteName = noteNames[midiNumber % 12];
+  const octave = Math.floor(midiNumber / 12) - 1;
+  return `${noteName}${octave}`;
+};
+
 export function BandArranger({ midiData }: BandArrangerProps) {
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>(['piano', 'bass']);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -35,10 +42,10 @@ export function BandArranger({ midiData }: BandArrangerProps) {
     track.setTimeSignature(4, 4);
     
     notes.forEach(note => {
-      const noteName = noteNames[note.pitch % 12];
-      const octave = Math.floor(note.pitch / 12) - 1;
+      const pitchString = getValidPitch(note.pitch);
+      // Use type assertion to satisfy MidiWriter
       track.addEvent(new MidiWriter.NoteEvent({
-        pitch: [`${noteName}${octave}`],
+        pitch: [pitchString as any],
         duration: '4',
         velocity: note.velocity
       }));
@@ -108,7 +115,7 @@ export function BandArranger({ midiData }: BandArrangerProps) {
       <tr><th>#</th><th>Pitch</th><th>Note</th><th>Start (s)</th><th>Duration (s)</th><th>Velocity</th></tr>
     </thead>
     <tbody>
-      ${convertedData.notes.map((note, idx) => {
+      ${convertedData.notes.map((note: any, idx: number) => {
         const noteName = noteNames[note.pitch % 12];
         const octave = Math.floor(note.pitch / 12) - 1;
         return `<tr class="note-row">
