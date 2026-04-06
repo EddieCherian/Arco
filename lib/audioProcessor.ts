@@ -35,7 +35,7 @@ export class AudioProcessor {
     const rawNotes = noteFramesToTime(
       addPitchBendsToNoteEvents(
         contours,
-        outputToNotesPoly(frames, onsets, 0.25, 0.25, 5)
+        outputToNotesPoly(frames, onsets, 0.6, 0.6, 5)
       )
     );
 
