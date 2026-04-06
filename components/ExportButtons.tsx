@@ -13,6 +13,13 @@ interface ExportButtonsProps {
 export function ExportButtons({ midiData }: ExportButtonsProps) {
   const [isExporting, setIsExporting] = useState(false);
 
+  const convertMidiToNoteName = (midiNumber: number): string => {
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const octave = Math.floor(midiNumber / 12) - 1;
+    const noteName = notes[midiNumber % 12];
+    return `${noteName}${octave}`;
+  };
+
   const exportPDF = async () => {
     setIsExporting(true);
     try {
@@ -55,8 +62,9 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
       track.setTimeSignature(midiData.timeSignature[0], midiData.timeSignature[1]);
       
       midiData.notes.forEach(note => {
+        const noteName = convertMidiToNoteName(note.pitch);
         track.addEvent(new MidiWriter.NoteEvent({
-          pitch: [note.pitch.toString()],
+          pitch: [noteName],
           duration: '4',
           velocity: note.velocity
         }));
@@ -80,7 +88,7 @@ export function ExportButtons({ midiData }: ExportButtonsProps) {
   const exportAudio = async () => {
     setIsExporting(true);
     try {
-      const audioContext = new AudioContext();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const duration = Math.max(...midiData.notes.map(n => n.endTime), 1);
       const sampleRate = audioContext.sampleRate;
       const samples = duration * sampleRate;
