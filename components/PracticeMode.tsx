@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import * as Tone from 'tone';
 import { Play, Pause, Square, Target } from 'lucide-react';
 import { SheetMusicRenderer } from './SheetMusicRenderer';
 import { MidiData } from '@/lib/types';
@@ -15,47 +14,72 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentNoteIndex, setCurrentNoteIndex] = useState(-1);
   const [speed, setSpeed] = useState(0.7);
-  const synthRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const isPlayingRef = useRef(false);
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
     if (isActive) {
-      const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-      synthRef.current = synth;
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       
       return () => {
-        if (synthRef.current) {
-          synthRef.current.dispose();
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
         }
-        Tone.Transport.stop();
-        Tone.Transport.cancel();
+        timeoutsRef.current.forEach(clearTimeout);
       };
     }
   }, [isActive]);
 
   const stopPractice = () => {
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
     setIsPlaying(false);
     isPlayingRef.current = false;
     setCurrentNoteIndex(-1);
   };
   
+  const playNote = (pitch: number, startTime: number, duration: number, velocity: number, index: number) => {
+    if (!audioContextRef.current || !isPlayingRef.current) return;
+    
+    const now = audioContextRef.current.currentTime;
+    const scheduleTime = Math.max(now, startTime / speed);
+    
+    const oscillator = audioContextRef.current.createOscillator();
+    const gainNode = audioContextRef.current.createGain();
+    
+    const frequency = 440 * Math.pow(2, (pitch - 69) / 12);
+    oscillator.frequency.value = frequency;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.value = velocity / 127 * 0.5;
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContextRef.current.destination);
+    
+    oscillator.start(scheduleTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, scheduleTime + duration);
+    oscillator.stop(scheduleTime + duration);
+    
+    setCurrentNoteIndex(index);
+  };
+  
   const schedulePracticeNotes = () => {
+    if (!audioContextRef.current) return;
+    
     let currentTime = 0;
     
     for (let i = 0; i < midiData.notes.length; i++) {
       const note = midiData.notes[i];
-      const duration = note.endTime - note.startTime;
-      const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
+      const duration = (note.endTime - note.startTime) / speed;
       
-      Tone.Transport.schedule((time) => {
-        if (synthRef.current && isPlayingRef.current) {
-          synthRef.current.triggerAttackRelease(frequency, duration, time);
-          setCurrentNoteIndex(i);
+      const timeout = setTimeout(() => {
+        if (isPlayingRef.current) {
+          playNote(note.pitch, performance.now() / 1000, duration, note.velocity, i);
         }
-      }, currentTime);
+      }, currentTime * 1000);
       
+      timeoutsRef.current.push(timeout);
       currentTime += duration;
     }
   };
@@ -66,20 +90,19 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
       return;
     }
     
-    await Tone.start();
-    Tone.Transport.bpm.value = midiData.tempo * speed;
-    Tone.Destination.volume.value = -6;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
     
+    await audioContextRef.current.resume();
     isPlayingRef.current = true;
     schedulePracticeNotes();
-    Tone.Transport.start();
     setIsPlaying(true);
   };
   
   const pausePractice = () => {
-    Tone.Transport.pause();
-    setIsPlaying(false);
     isPlayingRef.current = false;
+    setIsPlaying(false);
   };
 
   if (!isActive) {
@@ -149,13 +172,7 @@ export function PracticeMode({ midiData }: PracticeModeProps) {
           max="1.5"
           step="0.01"
           value={speed}
-          onChange={(e) => {
-            const val = parseFloat(e.target.value);
-            setSpeed(val);
-            if (isPlaying) {
-              Tone.Transport.bpm.value = midiData.tempo * val;
-            }
-          }}
+          onChange={(e) => setSpeed(parseFloat(e.target.value))}
           className="w-full"
         />
       </div>
