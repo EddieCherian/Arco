@@ -12,13 +12,14 @@ interface AudioRecorderProps {
 export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  
+
   const startRecording = async () => {
     setError(null);
     try {
@@ -27,144 +28,148 @@ export function AudioRecorder({ onTranscriptionComplete }: AudioRecorderProps) {
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => { 
-        if (e.data.size > 0) chunksRef.current.push(e.data); 
-      };
-      
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         setAudioBlob(blob);
         await processAudio(blob);
       };
-      
       mediaRecorder.start(100);
       setIsRecording(true);
     } catch (err) {
       setError('Could not access microphone. Please check permissions.');
-      console.error(err);
     }
   };
-  
+
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       try {
         mediaRecorderRef.current.stop();
         setIsRecording(false);
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-      } catch (err) {
+        streamRef.current?.getTracks().forEach(t => t.stop());
+      } catch {
         setError('Error stopping recording');
-        console.error(err);
       }
     }
   };
-  
+
   const processAudio = async (blob: Blob) => {
     setIsProcessing(true);
     setError(null);
     try {
+      setProcessingStep('Analyzing audio...');
       const arrayBuffer = await blob.arrayBuffer();
       audioContextRef.current = new AudioContext();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+
+      setProcessingStep('Detecting melody...');
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
-      
+
       if (midiData.notes.length === 0) {
-        setError('No notes detected. Please try recording a clearer melody.');
+        setError('No notes detected. Try recording a clearer melody.');
       } else {
         onTranscriptionComplete(midiData);
       }
     } catch (err) {
-      console.error('Transcription failed:', err);
       setError('Failed to transcribe audio. Please try again.');
     } finally {
       setIsProcessing(false);
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      setProcessingStep('');
+      audioContextRef.current?.close();
     }
   };
-  
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
     setIsProcessing(true);
     setError(null);
     try {
+      setProcessingStep('Reading file...');
       const arrayBuffer = await file.arrayBuffer();
       audioContextRef.current = new AudioContext();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+
+      setProcessingStep('Detecting melody...');
       const midiData = await AudioProcessor.transcribeAudio(audioBuffer);
-      
+
       if (midiData.notes.length === 0) {
-        setError('No notes detected in file. Please try a different audio file.');
+        setError('No notes detected. Try a different audio file.');
       } else {
         onTranscriptionComplete(midiData);
       }
-    } catch (err) {
-      console.error('File processing failed:', err);
-      setError('Failed to process audio file. Please try a different file.');
+    } catch {
+      setError('Failed to process file. Please try a different audio file.');
     } finally {
       setIsProcessing(false);
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      setProcessingStep('');
+      audioContextRef.current?.close();
     }
   };
-  
+
+  const css = `
+    .rec-wrap { position: relative; }
+    .rec-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .rec-btn { display: flex; align-items: center; gap: 8px; padding: 12px 28px; border: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; transition: background 0.2s, transform 0.1s; position: relative; }
+    .rec-btn:active { transform: scale(0.98); }
+    .rec-btn-record { background: #C9A84C; color: #05080F; }
+    .rec-btn-record:hover { background: #E8C96A; }
+    .rec-btn-stop { background: transparent; color: #ff6666; border: 1px solid #ff444430; padding-left: 36px; }
+    .rec-btn-stop:hover { background: #ff444408; }
+    .rec-pulse { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 7px; height: 7px; background: #ff6666; border-radius: 50%; animation: recpulse 1s ease-in-out infinite; }
+    @keyframes recpulse { 0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); } 50% { opacity: 0.4; transform: translateY(-50%) scale(0.7); } }
+    .rec-btn-upload { background: transparent; color: #EEF2FF44; border: 1px solid #C9A84C18; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; padding: 12px 28px; display: flex; align-items: center; gap: 8px; transition: border-color 0.2s, color 0.2s, background 0.2s; }
+    .rec-btn-upload:hover { border-color: #C9A84C44; color: #EEF2FF99; background: #C9A84C06; }
+    .rec-processing { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding: 14px 18px; border: 1px solid #C9A84C15; background: #C9A84C06; }
+    .rec-processing-text { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #C9A84C; opacity: 0.8; }
+    .rec-processing-bar { flex: 1; height: 1px; background: #C9A84C15; position: relative; overflow: hidden; }
+    .rec-processing-fill { position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, #C9A84C, transparent); animation: recbar 1.5s ease-in-out infinite; }
+    @keyframes recbar { from { left: -100%; } to { left: 100%; } }
+    .rec-error { margin-top: 16px; padding: 12px 16px; border: 1px solid #ff444430; background: #ff444406; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #ff6666; }
+    .rec-waveform { margin-top: 20px; border-top: 1px solid #C9A84C10; padding-top: 20px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+  `;
+
   return (
-    <div className="bg-gradient-to-br from-[#0A0F1A] to-[#05080F] rounded-2xl border border-[#C9A84C]/20 p-6">
-      <div className="flex gap-3 flex-wrap">
-        {!isRecording ? (
-          <button
-            onClick={startRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#C9A84C] to-[#E5C46B] text-[#05080F] rounded-xl font-semibold hover:shadow-lg hover:shadow-[#C9A84C]/25 transition-all duration-300"
-          >
-            <Mic size={18} />
-            Start Recording
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-red-500/20 border border-red-500/50 text-red-400 rounded-xl font-semibold hover:bg-red-500/30 transition-all duration-300"
-          >
-            <Square size={18} />
-            Stop Recording
-          </button>
+    <>
+      <style>{css}</style>
+      <div className="rec-wrap">
+        <div className="rec-row">
+          {!isRecording ? (
+            <button className="rec-btn rec-btn-record" onClick={startRecording} disabled={isProcessing}>
+              <Mic size={13} /> Record
+            </button>
+          ) : (
+            <button className="rec-btn rec-btn-stop" onClick={stopRecording}>
+              <span className="rec-pulse" />
+              Stop
+            </button>
+          )}
+          <label className="rec-btn-upload">
+            <Upload size={13} /> Upload Audio
+            <input type="file" accept="audio/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+          </label>
+        </div>
+
+        {isProcessing && (
+          <div className="rec-processing">
+            <Loader2 size={12} className="spin" color="#C9A84C" />
+            <span className="rec-processing-text">{processingStep}</span>
+            <div className="rec-processing-bar">
+              <div className="rec-processing-fill" />
+            </div>
+          </div>
         )}
-        
-        <label className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 font-semibold cursor-pointer hover:bg-white/10 hover:border-[#C9A84C]/30 transition-all duration-300">
-          <Upload size={18} />
-          Upload Audio
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-        </label>
+
+        {error && <div className="rec-error">{error}</div>}
+
+        {audioBlob && !isProcessing && (
+          <div className="rec-waveform">
+            <WaveformVisualizer audioBlob={audioBlob} />
+          </div>
+        )}
       </div>
-      
-      {error && (
-        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-      
-      {isProcessing && (
-        <div className="mt-4 flex items-center gap-2 text-[#C9A84C]">
-          <Loader2 className="animate-spin" size={18} />
-          <span className="text-sm">Transcribing audio with AI...</span>
-        </div>
-      )}
-      
-      {audioBlob && !isProcessing && (
-        <div className="mt-4">
-          <WaveformVisualizer audioBlob={audioBlob} />
-        </div>
-      )}
-    </div>
+    </>
   );
 }
