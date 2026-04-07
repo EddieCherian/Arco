@@ -1,7 +1,7 @@
 import { BasicPitch, noteFramesToTime, addPitchBendsToNoteEvents, outputToNotesPoly } from '@spotify/basic-pitch';
 
-// 🔥 FIXED URL (ONLY CHANGE)
-const MODEL_URL = 'https://unpkg.com/@spotify/basic-pitch@0.1.3/model/model.json';
+// 🔥 USE YOUR LOCAL MODEL (THIS IS THE FIX)
+const MODEL_URL = '/model/model.json';
 
 let cachedModel: BasicPitch | null = null;
 
