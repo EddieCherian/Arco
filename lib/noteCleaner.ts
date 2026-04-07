@@ -36,7 +36,7 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
     (note.endTime - note.startTime) >= minDuration
   );
   
-  console.log(`After duration filter: ${cleaned.length} notes (removed ${normalizedNotes.length - cleaned.length})`);
+  console.log(`After duration filter: ${cleaned.length} notes`);
   
   // Deduplicate same-time notes (keep strongest)
   const uniqueByTime = new Map();
@@ -69,13 +69,12 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
   // 🔥 RHYTHM FIX (QUANTIZATION)
   // =========================
 
-  const tempo = 120; // you can replace this later with detected tempo
+  const tempo = 120;
   const secondsPerBeat = 60 / tempo;
 
-  // snap to 8th notes (you can tweak this)
   const quantize = (time: number) => {
     const beats = time / secondsPerBeat;
-    const snapped = Math.round(beats * 2) / 2; // 1/8 notes
+    const snapped = Math.round(beats * 2) / 2; // 8th notes
     return snapped * secondsPerBeat;
   };
 
@@ -86,12 +85,33 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
     return {
       ...note,
       startTime: start,
-      endTime: Math.max(start + 0.1, end), // prevent zero-length notes
+      endTime: Math.max(start + 0.1, end),
     };
   });
 
-  console.log('🎯 Quantized notes sample:', quantized.slice(0, 5));
-  console.log(`✅ Final cleaned notes: ${quantized.length}`);
+  // =========================
+  // 🔥 CONVERT TO REAL NOTE DURATIONS
+  // =========================
 
-  return quantized;
+  const withDurations = quantized.map(note => {
+    const durationSeconds = note.endTime - note.startTime;
+    const beats = durationSeconds / secondsPerBeat;
+
+    let duration = "8"; // default
+
+    if (beats >= 1) duration = "q";        // quarter
+    else if (beats >= 0.5) duration = "8";  // eighth
+    else if (beats >= 0.25) duration = "16";
+    else duration = "32";
+
+    return {
+      ...note,
+      duration, // 👈 THIS is what your sheet music NEEDS
+    };
+  });
+
+  console.log('🎯 Final notes with durations:', withDurations.slice(0, 5));
+  console.log(`✅ Final cleaned notes: ${withDurations.length}`);
+
+  return withDurations;
 }
