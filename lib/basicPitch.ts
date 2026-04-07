@@ -61,6 +61,22 @@ export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<any[]> {
   const onsets: number[][] = [];
   const contours: number[][] = [];
 
+// 🔥 NORMALIZE AUDIO (CRITICAL FIX)
+const data = audioBuffer.getChannelData(0);
+
+let max = 0;
+for (let i = 0; i < data.length; i++) {
+  const val = Math.abs(data[i]);
+  if (val > max) max = val;
+}
+
+if (max > 0) {
+  for (let i = 0; i < data.length; i++) {
+    data[i] /= max;
+  }
+  console.log('🔊 Normalized audio');
+}
+
   // 🔥 TIMEOUT PROTECTION (prevents silent failure)
   await Promise.race([
     model.evaluateModel(
