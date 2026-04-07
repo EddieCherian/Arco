@@ -15,23 +15,69 @@ async function getModel(): Promise<BasicPitch> {
 export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<any[]> {
   console.log('🎵 Running Basic Pitch...');
 
+  // 🔥 TRIM AUDIO (max ~10s)
+  if (audioBuffer.duration > 10) {
+    const ctx = new AudioContext();
+    const trimmed = ctx.createBuffer(
+      audioBuffer.numberOfChannels,
+      10 * audioBuffer.sampleRate,
+      audioBuffer.sampleRate
+    );
+
+    for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+      const oldData = audioBuffer.getChannelData(ch);
+      const newData = trimmed.getChannelData(ch);
+      newData.set(oldData.slice(0, 10 * audioBuffer.sampleRate));
+    }
+
+    audioBuffer = trimmed;
+    console.log('✂️ Trimmed to 10s');
+  }
+
+  // 🔥 FORCE MONO
+  if (audioBuffer.numberOfChannels > 1) {
+    const ctx = new AudioContext();
+    const mono = ctx.createBuffer(
+      1,
+      audioBuffer.length,
+      audioBuffer.sampleRate
+    );
+
+    const left = audioBuffer.getChannelData(0);
+    const right = audioBuffer.getChannelData(1);
+    const out = mono.getChannelData(0);
+
+    for (let i = 0; i < audioBuffer.length; i++) {
+      out[i] = (left[i] + right[i]) / 2;
+    }
+
+    audioBuffer = mono;
+    console.log('🎚️ Converted to mono');
+  }
+
   const model = await getModel();
 
   const frames: number[][] = [];
   const onsets: number[][] = [];
   const contours: number[][] = [];
 
-  await model.evaluateModel(
-    audioBuffer,
-    (frame: number[][], onset: number[][], contour: number[][]) => {
-      frames.push(...frame);
-      onsets.push(...onset);
-      contours.push(...contour);
-    },
-    (progress: number) => {
-      console.log(`Basic Pitch progress: ${Math.round(progress * 100)}%`);
-    }
-  );
+  // 🔥 TIMEOUT PROTECTION (prevents silent failure)
+  await Promise.race([
+    model.evaluateModel(
+      audioBuffer,
+      (frame: number[][], onset: number[][], contour: number[][]) => {
+        frames.push(...frame);
+        onsets.push(...onset);
+        contours.push(...contour);
+      },
+      (progress: number) => {
+        console.log(`Basic Pitch progress: ${Math.round(progress * 100)}%`);
+      }
+    ),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Basic Pitch timeout')), 15000)
+    )
+  ]);
 
   console.log(`Frames: ${frames.length}, Onsets: ${onsets.length}`);
 
