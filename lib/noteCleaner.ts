@@ -5,9 +5,8 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
   console.log('🔧 Cleaning notes. Input count:', notes.length);
   console.log('First raw note sample:', notes[0]);
   
-  // Normalize note properties (Basic Pitch uses different property names)
+  // Normalize note properties
   const normalizedNotes = notes.map(note => {
-    // Handle different property naming conventions
     const pitch = note.pitchMidi !== undefined ? note.pitchMidi : 
                   note.pitch !== undefined ? note.pitch : 
                   note.midi !== undefined ? note.midi : 60;
@@ -31,7 +30,7 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
   
   console.log('Normalized notes sample:', normalizedNotes.slice(0, 3));
   
-  // Only remove notes that are impossibly short (< 30ms)
+  // Remove impossibly short notes
   const minDuration = 0.03;
   let cleaned = normalizedNotes.filter(note => 
     (note.endTime - note.startTime) >= minDuration
@@ -39,7 +38,7 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
   
   console.log(`After duration filter: ${cleaned.length} notes (removed ${normalizedNotes.length - cleaned.length})`);
   
-  // Remove duplicate notes at exact same time (keep the highest velocity)
+  // Deduplicate same-time notes (keep strongest)
   const uniqueByTime = new Map();
   for (const note of cleaned) {
     const timeKey = note.startTime.toFixed(2);
@@ -51,21 +50,48 @@ export function cleanAndStabilizeNotes(notes: any[]): any[] {
   
   console.log(`After deduplication: ${cleaned.length} notes`);
   
-  // Sort by start time
+  // Sort
   cleaned.sort((a, b) => a.startTime - b.startTime);
   
-  // If we lost all notes but had input, return first 10 notes as fallback
+  // Fallback
   if (cleaned.length === 0 && normalizedNotes.length > 0) {
     console.warn('⚠️ All notes filtered! Returning first 10 raw notes as fallback.');
     return normalizedNotes.slice(0, 10);
   }
   
-  // Limit to first 50 notes to avoid overwhelming the renderer
+  // Limit
   if (cleaned.length > 50) {
     console.log(`Limiting to 50 notes (from ${cleaned.length})`);
     cleaned = cleaned.slice(0, 50);
   }
-  
-  console.log(`✅ Final cleaned notes: ${cleaned.length}`);
-  return cleaned;
+
+  // =========================
+  // 🔥 RHYTHM FIX (QUANTIZATION)
+  // =========================
+
+  const tempo = 120; // you can replace this later with detected tempo
+  const secondsPerBeat = 60 / tempo;
+
+  // snap to 8th notes (you can tweak this)
+  const quantize = (time: number) => {
+    const beats = time / secondsPerBeat;
+    const snapped = Math.round(beats * 2) / 2; // 1/8 notes
+    return snapped * secondsPerBeat;
+  };
+
+  const quantized = cleaned.map(note => {
+    const start = quantize(note.startTime);
+    const end = quantize(note.endTime);
+
+    return {
+      ...note,
+      startTime: start,
+      endTime: Math.max(start + 0.1, end), // prevent zero-length notes
+    };
+  });
+
+  console.log('🎯 Quantized notes sample:', quantized.slice(0, 5));
+  console.log(`✅ Final cleaned notes: ${quantized.length}`);
+
+  return quantized;
 }
