@@ -22,15 +22,14 @@ export function PlaybackControls({
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(0.7);
   const [progress, setProgress] = useState(0);
+
   const synthRef = useRef<any>(null);
   const partRef = useRef<any>(null);
   const toneRef = useRef<any>(null);
   const progressIntervalRef = useRef<any>(null);
 
   useEffect(() => {
-    return () => {
-      stopPlayback();
-    };
+    return () => stopPlayback();
   }, []);
 
   const midiToNote = (midi: number): string => {
@@ -39,20 +38,30 @@ export function PlaybackControls({
     return `${notes[midi % 12]}${Math.max(0, octave)}`;
   };
 
+  const getSafeEndTime = (note: any) => {
+    return note.endTime ?? (note.startTime + 0.5);
+  };
+
   const stopPlayback = async () => {
     if (partRef.current) {
       partRef.current.stop();
       partRef.current.dispose();
       partRef.current = null;
     }
+
     if (synthRef.current) {
       synthRef.current.releaseAll?.();
+      synthRef.current.dispose();
+      synthRef.current = null;
     }
+
     if (toneRef.current) {
       toneRef.current.Transport.stop();
       toneRef.current.Transport.cancel();
     }
+
     clearInterval(progressIntervalRef.current);
+
     setIsPlaying(false);
     setProgress(0);
     onCurrentNoteChange?.(-1);
@@ -60,7 +69,7 @@ export function PlaybackControls({
   };
 
   const startPlayback = async () => {
-    if (midiData.notes.length === 0) return;
+    if (!midiData?.notes?.length) return;
 
     try {
       const Tone = await import('tone');
@@ -68,55 +77,75 @@ export function PlaybackControls({
 
       await Tone.start();
 
-      // Clean up previous
-      if (partRef.current) { partRef.current.stop(); partRef.current.dispose(); }
-      if (synthRef.current) { synthRef.current.dispose(); }
+      // cleanup
+      if (partRef.current) {
+        partRef.current.stop();
+        partRef.current.dispose();
+      }
+
+      if (synthRef.current) {
+        synthRef.current.dispose();
+      }
+
       Tone.Transport.stop();
       Tone.Transport.cancel();
+      Tone.Transport.seconds = 0;
 
-      // Create synth
-      const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.8 },
-        volume: Tone.gainToDb(volume),
-      }).toDestination();
+      // synth (ONLY transcribed playback)
+      const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+      synth.volume.value = Tone.gainToDb(volume);
       synthRef.current = synth;
 
-      const totalDuration = Math.max(...midiData.notes.map(n => n.endTime));
+      const totalDuration = Math.max(
+        ...midiData.notes.map(n => getSafeEndTime(n))
+      );
 
-      // Build part events
-      const events = midiData.notes.map((note, idx) => ({
-        time: note.startTime / speed,
-        note: midiToNote(note.pitch),
-        duration: Math.max(0.05, (note.endTime - note.startTime) / speed),
-        velocity: note.velocity / 127,
-        idx,
-      }));
+      const events = midiData.notes.map((note, idx) => {
+        const end = getSafeEndTime(note);
+
+        return {
+          time: note.startTime,
+          note: midiToNote(note.pitch),
+          duration: Math.max(0.05, end - note.startTime),
+          velocity: (note.velocity ?? 100) / 127,
+          idx,
+        };
+      });
 
       const part = new Tone.Part((time: number, event: any) => {
-        synth.triggerAttackRelease(event.note, event.duration, time, event.velocity);
+        synth.triggerAttackRelease(
+          event.note,
+          event.duration,
+          time,
+          event.velocity
+        );
+
         Tone.getDraw().schedule(() => {
           onCurrentNoteChange?.(event.idx);
         }, time);
       }, events);
 
       part.loop = isLooping;
-      if (isLooping) part.loopEnd = totalDuration / speed;
+      if (isLooping) part.loopEnd = totalDuration;
+
       partRef.current = part;
 
-      Tone.Transport.bpm.value = midiData.tempo * speed;
+      Tone.Transport.bpm.value = midiData.tempo || 120;
+
       part.start(0);
       Tone.Transport.start();
 
       setIsPlaying(true);
       onPlaybackStart?.();
 
-      // Progress tracking
       clearInterval(progressIntervalRef.current);
+
       progressIntervalRef.current = setInterval(() => {
         const pos = Tone.Transport.seconds;
-        const pct = Math.min((pos / (totalDuration / speed)) * 100, 100);
+        const pct = Math.min((pos / totalDuration) * 100, 100);
+
         setProgress(pct);
+
         if (pct >= 100 && !isLooping) {
           stopPlayback();
         }
@@ -129,40 +158,30 @@ export function PlaybackControls({
 
   const pausePlayback = async () => {
     if (!toneRef.current) return;
+
     toneRef.current.Transport.pause();
     clearInterval(progressIntervalRef.current);
     setIsPlaying(false);
   };
 
-  const resumePlayback = async () => {
-    if (!toneRef.current) return;
-    toneRef.current.Transport.start();
-    setIsPlaying(true);
-  };
-
   const css = `
     .playback { display: flex; flex-direction: column; gap: 16px; }
     .playback-btns { display: flex; align-items: center; gap: 8px; }
-    .pb-btn { width: 40px; height: 40px; border: 1px solid #C9A84C25; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #EEF2FF55; transition: border-color 0.2s, color 0.2s, background 0.2s; flex-shrink: 0; }
-    .pb-btn:hover:not(:disabled) { border-color: #C9A84C66; color: #EEF2FF99; background: #C9A84C08; }
-    .pb-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .pb-btn { width: 40px; height: 40px; border: 1px solid #C9A84C25; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #EEF2FF55; transition: 0.2s; }
     .pb-btn.primary { background: #C9A84C; color: #05080F; border-color: #C9A84C; }
-    .pb-btn.primary:hover:not(:disabled) { background: #E8C96A; }
     .pb-btn.active { border-color: #C9A84C; color: #C9A84C; }
     .pb-divider { width: 1px; height: 24px; background: #C9A84C15; margin: 0 4px; }
     .pb-control { display: flex; align-items: center; gap: 10px; }
-    .pb-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #EEF2FF33; white-space: nowrap; }
-    .pb-value { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #C9A84C; min-width: 32px; }
-    .pb-slider { -webkit-appearance: none; height: 1px; background: #C9A84C18; outline: none; cursor: pointer; width: 80px; }
-    .pb-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #C9A84C; cursor: pointer; }
+    .pb-slider { width: 80px; }
     .pb-progress-wrap { height: 2px; background: #C9A84C12; position: relative; }
-    .pb-progress-bar { height: 100%; background: #C9A84C; transition: width 0.1s linear; }
-    .pb-progress-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #C9A84C; border-radius: 50%; transition: left 0.1s linear; }
+    .pb-progress-bar { height: 100%; background: #C9A84C; }
+    .pb-progress-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #C9A84C; border-radius: 50%; }
   `;
 
   return (
     <>
       <style>{css}</style>
+
       <div className="playback">
         <div className="pb-progress-wrap">
           <div className="pb-progress-bar" style={{ width: `${progress}%` }} />
@@ -171,7 +190,7 @@ export function PlaybackControls({
 
         <div className="playback-btns">
           {!isPlaying ? (
-            <button className="pb-btn primary" onClick={startPlayback} disabled={midiData.notes.length === 0}>
+            <button className="pb-btn primary" onClick={startPlayback}>
               <Play size={16} />
             </button>
           ) : (
@@ -184,25 +203,41 @@ export function PlaybackControls({
             <Square size={14} />
           </button>
 
-          <button className={`pb-btn ${isLooping ? 'active' : ''}`} onClick={() => setIsLooping(!isLooping)}>
+          <button
+            className={`pb-btn ${isLooping ? 'active' : ''}`}
+            onClick={() => setIsLooping(!isLooping)}
+          >
             <Repeat size={14} />
           </button>
 
           <div className="pb-divider" />
 
           <div className="pb-control">
-            <Volume2 size={12} color="#EEF2FF33" />
-            <input className="pb-slider" type="range" min="0" max="1" step="0.01" value={volume}
-              onChange={(e) => setVolume(parseFloat(e.target.value))} />
+            <Volume2 size={12} />
+            <input
+              className="pb-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+            />
           </div>
 
           <div className="pb-divider" />
 
           <div className="pb-control">
-            <Gauge size={12} color="#EEF2FF33" />
-            <input className="pb-slider" type="range" min="0.5" max="2" step="0.05" value={speed}
-              onChange={(e) => setSpeed(parseFloat(e.target.value))} />
-            <span className="pb-value">{Math.round(speed * 100)}%</span>
+            <Gauge size={12} />
+            <input
+              className="pb-slider"
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.05"
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+            />
           </div>
         </div>
       </div>
