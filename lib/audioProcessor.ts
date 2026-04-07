@@ -7,6 +7,14 @@ export class AudioProcessor {
   static async transcribeAudio(audioBuffer: AudioBuffer): Promise<MidiData> {
     console.log('🎧 Starting transcription...');
 
+    // 🔥 DEBUG AUDIO BUFFER
+    console.log('🎧 AudioBuffer info:', {
+      duration: audioBuffer.duration,
+      sampleRate: audioBuffer.sampleRate,
+      length: audioBuffer.length,
+      channels: audioBuffer.numberOfChannels,
+    });
+
     // 🎧 STEP 1: detect notes
     const rawNotes = await runBasicPitch(audioBuffer);
     console.log('🧠 Raw notes:', rawNotes?.slice(0, 10));
@@ -29,7 +37,7 @@ export class AudioProcessor {
       startTime: n.startTime,
       endTime: n.endTime,
       velocity: n.velocity ?? 100,
-      clef: 'treble', // 🔥 IMPORTANT - tells renderer which staff
+      clef: 'treble',
     }));
 
     // 🤖 BASS (AI GENERATED) - add clef property
@@ -40,13 +48,12 @@ export class AudioProcessor {
       startTime: n.startTime,
       endTime: n.endTime,
       velocity: n.velocity ?? 80,
-      clef: 'bass', // 🔥 IMPORTANT - tells renderer which staff
+      clef: 'bass',
     }));
 
     // 🎼 MERGE INTO ONE ARRAY
     const allNotes = [...melodyNotes, ...bassNotes];
 
-    // Detect tempo from onsets
     const tempo = this.estimateTempo(rawNotes);
 
     return {
@@ -102,6 +109,9 @@ export class AudioProcessor {
   }
 
   static async blobToAudioBuffer(blob: Blob): Promise<AudioBuffer> {
+    // 🔥 DEBUG BLOB TYPE
+    console.log('📦 Blob type:', blob.type);
+
     const arrayBuffer = await blob.arrayBuffer();
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     return await audioContext.decodeAudioData(arrayBuffer);
