@@ -55,29 +55,49 @@ export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<any[]> {
     console.log('🎚️ Converted to mono');
   }
 
+  // 🔥 NORMALIZE AUDIO
+  const data = audioBuffer.getChannelData(0);
+
+  let max = 0;
+  for (let i = 0; i < data.length; i++) {
+    const val = Math.abs(data[i]);
+    if (val > max) max = val;
+  }
+
+  if (max > 0) {
+    for (let i = 0; i < data.length; i++) {
+      data[i] /= max;
+    }
+    console.log('🔊 Normalized audio');
+  }
+
+  // 🔥 RESAMPLE TO 22050 Hz (CRITICAL)
+  if (audioBuffer.sampleRate !== 22050) {
+    const targetRate = 22050;
+
+    const offlineCtx = new OfflineAudioContext(
+      1,
+      Math.ceil(audioBuffer.length * targetRate / audioBuffer.sampleRate),
+      targetRate
+    );
+
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start(0);
+
+    audioBuffer = await offlineCtx.startRendering();
+
+    console.log('🔁 Resampled to 22050 Hz');
+  }
+
   const model = await getModel();
 
   const frames: number[][] = [];
   const onsets: number[][] = [];
   const contours: number[][] = [];
 
-// 🔥 NORMALIZE AUDIO (CRITICAL FIX)
-const data = audioBuffer.getChannelData(0);
-
-let max = 0;
-for (let i = 0; i < data.length; i++) {
-  const val = Math.abs(data[i]);
-  if (val > max) max = val;
-}
-
-if (max > 0) {
-  for (let i = 0; i < data.length; i++) {
-    data[i] /= max;
-  }
-  console.log('🔊 Normalized audio');
-}
-
-  // 🔥 TIMEOUT PROTECTION (prevents silent failure)
+  // 🔥 TIMEOUT PROTECTION
   await Promise.race([
     model.evaluateModel(
       audioBuffer,
