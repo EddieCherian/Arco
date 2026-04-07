@@ -1,6 +1,7 @@
 import { BasicPitch, noteFramesToTime, addPitchBendsToNoteEvents, outputToNotesPoly } from '@spotify/basic-pitch';
 
-const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@0.1.3/model/model.json';
+// 🔥 FIXED URL (ONLY CHANGE)
+const MODEL_URL = 'https://unpkg.com/@spotify/basic-pitch@0.1.3/model/model.json';
 
 let cachedModel: BasicPitch | null = null;
 
@@ -44,9 +45,9 @@ export async function runBasicPitch(audioBuffer: AudioBuffer): Promise<any[]> {
       outputToNotesPoly(
         frames,
         onsets,
-        0.4,  // onset threshold — tuned for piano
-        0.3,  // frame threshold — cuts ghost notes
-        1     // max polyphony — melody only, AI handles bass
+        0.4,
+        0.3,
+        1
       )
     )
   );
