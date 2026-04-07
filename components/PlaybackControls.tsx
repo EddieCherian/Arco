@@ -29,7 +29,9 @@ export function PlaybackControls({
   const progressIntervalRef = useRef<any>(null);
 
   useEffect(() => {
-    return () => stopPlayback();
+    return () => {
+      void stopPlayback();
+    };
   }, []);
 
   const midiToNote = (midi: number): string => {
@@ -60,7 +62,10 @@ export function PlaybackControls({
       toneRef.current.Transport.cancel();
     }
 
-    clearInterval(progressIntervalRef.current);
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
 
     setIsPlaying(false);
     setProgress(0);
@@ -77,7 +82,6 @@ export function PlaybackControls({
 
       await Tone.start();
 
-      // cleanup
       if (partRef.current) {
         partRef.current.stop();
         partRef.current.dispose();
@@ -91,7 +95,6 @@ export function PlaybackControls({
       Tone.Transport.cancel();
       Tone.Transport.seconds = 0;
 
-      // synth (ONLY transcribed playback)
       const synth = new Tone.PolySynth(Tone.Synth).toDestination();
       synth.volume.value = Tone.gainToDb(volume);
       synthRef.current = synth;
@@ -130,7 +133,7 @@ export function PlaybackControls({
 
       partRef.current = part;
 
-      Tone.Transport.bpm.value = midiData.tempo || 120;
+      Tone.Transport.bpm.value = (midiData.tempo || 120) * speed;
 
       part.start(0);
       Tone.Transport.start();
@@ -138,7 +141,9 @@ export function PlaybackControls({
       setIsPlaying(true);
       onPlaybackStart?.();
 
-      clearInterval(progressIntervalRef.current);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
 
       progressIntervalRef.current = setInterval(() => {
         const pos = Tone.Transport.seconds;
@@ -160,7 +165,12 @@ export function PlaybackControls({
     if (!toneRef.current) return;
 
     toneRef.current.Transport.pause();
-    clearInterval(progressIntervalRef.current);
+
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+
     setIsPlaying(false);
   };
 
